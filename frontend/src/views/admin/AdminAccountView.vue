@@ -1,11 +1,11 @@
 <script setup>
 import {computed} from "vue";
 import {AdminAccountPage} from "@/legacy/pages";
-import {useAuth} from "@/legacy/pages";
+import {useSession} from "@/composables/useSession";
 import AdminNav from "@/components/AdminNav.vue";
 
 const {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal, onPhotoChange, save, remove} = AdminAccountPage.setup();
-const {state} = useAuth();
+const {state} = useSession();
 const currentUsername = computed(() => state.me?.username || "");
 </script>
 
