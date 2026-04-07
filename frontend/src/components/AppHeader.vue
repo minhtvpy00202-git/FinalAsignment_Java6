@@ -57,6 +57,18 @@ const openNotification = async (notification) => {
     }
 };
 
+const hoverNotification = async (notification) => {
+    if (notification.read) return;
+    
+    notification.read = true;
+    unreadCount.value = Math.max(0, unreadCount.value - 1);
+    
+    try {
+        await api.notifications.read(notification.id);
+    } catch (e) {
+    }
+};
+
 const logout = async () => {
     try {
         await api.auth.logout();
@@ -122,8 +134,11 @@ onUnmounted(() => {
                             </button>
                             <div class="notification-dropdown" v-if="bellOpen">
                                 <div class="notification-dropdown-title">Thông báo</div>
-                                <button class="notification-item" type="button" v-for="item in notifications" :key="item.id" @click="openNotification(item)">
-                                    <div class="notification-item-title">{{ item.title }}</div>
+                                <button class="notification-item" :class="{ 'unread': !item.read }" type="button" v-for="item in notifications" :key="item.id" @click="openNotification(item)" @mouseenter="hoverNotification(item)">
+                                    <div class="notification-item-title">
+                                        <span class="unread-dot" v-if="!item.read"></span>
+                                        {{ item.title }}
+                                    </div>
                                     <div class="notification-item-content">{{ item.content }}</div>
                                 </button>
                                 <div class="notification-empty" v-if="!notifications.length">Chưa có thông báo</div>

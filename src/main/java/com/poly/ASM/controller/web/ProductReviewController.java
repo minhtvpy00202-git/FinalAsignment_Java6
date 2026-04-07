@@ -90,7 +90,7 @@ public class ProductReviewController {
         if (files == null || files.length == 0) {
             return results;
         }
-        Path uploadDir = Path.of("src/main/resources/static/images");
+        Path uploadDir = Path.of("uploads");
         for (MultipartFile file : files) {
             if (file == null || file.isEmpty()) {
                 continue;

@@ -77,8 +77,11 @@ public class ProductAController {
                                                   @RequestParam(value = "discount", required = false) BigDecimal discount,
                                                   @RequestParam(value = "imageFile", required = false) MultipartFile imageFile,
                                                   @RequestParam(value = "description", required = false) String description,
-                                                  @RequestParam("categoryId") String categoryId,
+                                                  @RequestParam(value = "categoryId", required = false) String categoryId,
                                                   @RequestParam Map<String, String> params) {
+        if (categoryId == null || categoryId.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Vui lòng chọn danh mục cho sản phẩm.");
+        }
         Map<Integer, Integer> sizeQtyMap = parseSizeQuantities(params);
         int totalQuantity = sizeQtyMap.values().stream().mapToInt(Integer::intValue).sum();
         Product product = new Product();
@@ -139,8 +142,11 @@ public class ProductAController {
                                                   @RequestParam(value = "discount", required = false) BigDecimal discount,
                                                   @RequestParam(value = "imageFile", required = false) MultipartFile imageFile,
                                                   @RequestParam(value = "description", required = false) String description,
-                                                  @RequestParam("categoryId") String categoryId,
+                                                  @RequestParam(value = "categoryId", required = false) String categoryId,
                                                   @RequestParam Map<String, String> params) {
+        if (categoryId == null || categoryId.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Vui lòng chọn danh mục cho sản phẩm.");
+        }
         Map<Integer, Integer> sizeQtyMap = parseSizeQuantities(params);
         int totalQuantity = sizeQtyMap.values().stream().mapToInt(Integer::intValue).sum();
         Product product = productService.findById(id)
@@ -178,7 +184,7 @@ public class ProductAController {
             ext = original.substring(original.lastIndexOf("."));
         }
         String fileName = "product-" + UUID.randomUUID() + ext;
-        Path uploadDir = Path.of("src/main/resources/static/images");
+        Path uploadDir = Path.of("uploads");
         try {
             Files.createDirectories(uploadDir);
             Files.write(uploadDir.resolve(fileName), file.getBytes());

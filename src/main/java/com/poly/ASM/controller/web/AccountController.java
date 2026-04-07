@@ -121,7 +121,7 @@ public class AccountController {
             ext = original.substring(original.lastIndexOf("."));
         }
         String fileName = "avatar-" + UUID.randomUUID() + ext;
-        Path uploadDir = Path.of("src/main/resources/static/images");
+        Path uploadDir = Path.of("uploads");
         try {
             Files.createDirectories(uploadDir);
             Files.write(uploadDir.resolve(fileName), file.getBytes());

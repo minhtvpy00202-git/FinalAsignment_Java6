@@ -89,6 +89,14 @@ onUnmounted(() => {
                             <p class="carousel-subtitle">Khám phá phong cách mới, tự tin tỏa sáng</p>
                             <router-link to="/product/list" class="btn btn-primary carousel-btn">Khám phá ngay</router-link>
                         </div>
+                        <div class="carousel-images" v-if="data?.newProducts?.length >= 2">
+                            <router-link :to="'/product/detail?id=' + data.newProducts[0].id" class="carousel-img-link">
+                                <img :src="data.newProducts[0].image ? '/images/' + data.newProducts[0].image : '/images/product1.jpg'" class="slider-img" />
+                            </router-link>
+                            <router-link :to="'/product/detail?id=' + data.newProducts[1].id" class="carousel-img-link">
+                                <img :src="data.newProducts[1].image ? '/images/' + data.newProducts[1].image : '/images/product1.jpg'" class="slider-img" />
+                            </router-link>
+                        </div>
                         <div class="carousel-bg" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
                     </div>
                     <div class="carousel-slide">
@@ -97,13 +105,29 @@ onUnmounted(() => {
                             <p class="carousel-subtitle">Săn sale ngay hôm nay</p>
                             <router-link to="/product/list" class="btn btn-primary carousel-btn">Mua sắm</router-link>
                         </div>
+                        <div class="carousel-images" v-if="data?.discountProducts?.length >= 2">
+                            <router-link :to="'/product/detail?id=' + data.discountProducts[0].id" class="carousel-img-link">
+                                <img :src="data.discountProducts[0].image ? '/images/' + data.discountProducts[0].image : '/images/product1.jpg'" class="slider-img" />
+                            </router-link>
+                            <router-link :to="'/product/detail?id=' + data.discountProducts[1].id" class="carousel-img-link">
+                                <img :src="data.discountProducts[1].image ? '/images/' + data.discountProducts[1].image : '/images/product1.jpg'" class="slider-img" />
+                            </router-link>
+                        </div>
                         <div class="carousel-bg" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"></div>
                     </div>
                     <div class="carousel-slide">
                         <div class="carousel-content">
-                            <h1 class="carousel-title">Thời trang cao cấp</h1>
+                            <h1 class="carousel-title">Sản phẩm bán chạy</h1>
                             <p class="carousel-subtitle">Phong cách sang trọng, đẳng cấp</p>
                             <router-link to="/product/list" class="btn btn-primary carousel-btn">Xem thêm</router-link>
+                        </div>
+                        <div class="carousel-images" v-if="data?.bestSellerProducts?.length >= 2">
+                            <router-link :to="'/product/detail?id=' + data.bestSellerProducts[0].id" class="carousel-img-link">
+                                <img :src="data.bestSellerProducts[0].image ? '/images/' + data.bestSellerProducts[0].image : '/images/product1.jpg'" class="slider-img" />
+                            </router-link>
+                            <router-link :to="'/product/detail?id=' + data.bestSellerProducts[1].id" class="carousel-img-link">
+                                <img :src="data.bestSellerProducts[1].image ? '/images/' + data.bestSellerProducts[1].image : '/images/product1.jpg'" class="slider-img" />
+                            </router-link>
                         </div>
                         <div class="carousel-bg" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"></div>
                     </div>
