@@ -159,6 +159,7 @@ public class ProductServiceImpl implements ProductService {
     private void attachSizes(Product product) {
         List<ProductSize> sizes = productSizeService.findByProductId(product.getId());
         product.setProductSizes(sizes);
+        syncInventory(product, sizes);
     }
 
     private void attachSizes(List<Product> products) {
@@ -176,7 +177,26 @@ public class ProductServiceImpl implements ProductService {
             map.computeIfAbsent(productId, key -> new ArrayList<>()).add(size);
         }
         for (Product product : products) {
-            product.setProductSizes(map.getOrDefault(product.getId(), new ArrayList<>()));
+            List<ProductSize> productSizes = map.getOrDefault(product.getId(), new ArrayList<>());
+            product.setProductSizes(productSizes);
+            syncInventory(product, productSizes);
         }
+    }
+
+    private void syncInventory(Product product, List<ProductSize> sizes) {
+        if (product == null) {
+            return;
+        }
+        int totalQuantity = 0;
+        if (sizes != null) {
+            for (ProductSize size : sizes) {
+                Integer quantity = size.getQuantity();
+                if (quantity != null && quantity > 0) {
+                    totalQuantity += quantity;
+                }
+            }
+        }
+        product.setQuantity(totalQuantity);
+        product.setAvailable(totalQuantity > 0);
     }
 }

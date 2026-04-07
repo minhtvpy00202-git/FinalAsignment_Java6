@@ -4,10 +4,20 @@ import {useRoute} from "vue-router";
 import {AdminOrderPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 
-const {rows, selected, status, payosCode, msg, detail: fetchDetail, updateStatus, cancelPayos} = AdminOrderPage.setup();
+const {rows, selected, status, payosCode, msg, detail: fetchDetail, updateStatus: persistStatus, cancelPayos, remove} = AdminOrderPage.setup();
 const route = useRoute();
 const mapRef = ref(null);
 const detailModalOpen = ref(false);
+const updatingStatus = ref(false);
+const actionMessage = ref("");
+const actionModalOpen = ref(false);
+const confirmModalOpen = ref(false);
+const confirmMessage = ref("");
+const simulatingDelivery = ref(false);
+const hasValidDestination = ref(false);
+const mapInfo = ref("");
+const deliveryButtonLabel = ref("Giao hàng");
+const retryShippingStatus = ref("SHIPPING_UNPAID");
 let map = null;
 let marker = null;
 let destMarker = null;
@@ -16,10 +26,10 @@ let simulateTimer = null;
 const statusLabel = (value) => {
     const labels = {
         PENDING_PAYMENT: "Đang chờ thanh toán",
-        PLACED_UNPAID: "Đã đặt - chưa thanh toán",
-        PLACED_PAID: "Đã đặt - đã thanh toán",
-        SHIPPING_UNPAID: "Đang giao - chưa thanh toán",
-        SHIPPING_PAID: "Đang giao - đã thanh toán",
+        PLACED_UNPAID: "Đã đặt - Chưa TT",
+        PLACED_PAID: "Đã đặt - Đã TT",
+        SHIPPING_UNPAID: "Đang giao - Chưa TT",
+        SHIPPING_PAID: "Đang giao - Đã TT",
         DELIVERED_SUCCESS: "Giao hàng thành công",
         DELIVERY_FAILED: "Giao hàng thất bại"
     };
@@ -60,7 +70,66 @@ const statusOptions = computed(() => {
     }
     return [{value: current || "PLACED_UNPAID", label: statusLabel(current || "PLACED_UNPAID")}];
 });
-const canUpdateStatus = computed(() => !isDelivered(selected.value?.order?.status || ""));
+const currentOrderStatus = computed(() => selected.value?.order?.status || "");
+const canStartDelivery = computed(() => {
+    if (simulatingDelivery.value) {
+        return false;
+    }
+    if (!hasValidDestination.value) {
+        return false;
+    }
+    return currentOrderStatus.value === "PLACED_UNPAID" || currentOrderStatus.value === "PLACED_PAID" || currentOrderStatus.value === "DELIVERY_FAILED";
+});
+const canCancelOrder = computed(() => currentOrderStatus.value === "DELIVERY_FAILED" && !simulatingDelivery.value);
+const deliveryCompleted = computed(() => isDelivered(currentOrderStatus.value));
+const showActionModal = (message) => {
+    actionMessage.value = message || "";
+    actionModalOpen.value = true;
+};
+const closeActionModal = () => {
+    actionModalOpen.value = false;
+};
+const openConfirmModal = (message) => {
+    confirmMessage.value = message || "Bạn có chắc chắn muốn thực hiện thao tác này?";
+    confirmModalOpen.value = true;
+};
+const closeConfirmModal = () => {
+    confirmModalOpen.value = false;
+    confirmMessage.value = "";
+};
+const refreshActionUI = () => {
+    if (currentOrderStatus.value === "DELIVERY_FAILED") {
+        deliveryButtonLabel.value = "Giao lại";
+        return;
+    }
+    deliveryButtonLabel.value = "Giao hàng";
+};
+const clearSimulation = () => {
+    if (simulateTimer) {
+        clearInterval(simulateTimer);
+        simulateTimer = null;
+    }
+    simulatingDelivery.value = false;
+};
+const destroyMap = () => {
+    clearSimulation();
+    if (map) {
+        map.remove();
+        map = null;
+    }
+    marker = null;
+    destMarker = null;
+    routeLine = null;
+};
+const forceMapResize = () => {
+    if (!map) {
+        return;
+    }
+    map.invalidateSize();
+    setTimeout(() => map && map.invalidateSize(), 80);
+    setTimeout(() => map && map.invalidateSize(), 220);
+    setTimeout(() => map && map.invalidateSize(), 420);
+};
 const openDetail = async (id) => {
     await fetchDetail(id);
     const firstOption = statusOptions.value[0]?.value;
@@ -70,10 +139,12 @@ const openDetail = async (id) => {
     detailModalOpen.value = true;
     await nextTick();
     await initMap();
+    refreshActionUI();
+    forceMapResize();
 };
 const closeDetailModal = () => {
     detailModalOpen.value = false;
-    clearSimulation();
+    destroyMap();
 };
 const ensureLeaflet = async () => {
     if (window.L) {
@@ -92,12 +163,6 @@ const ensureLeaflet = async () => {
     });
     return window.L;
 };
-const clearSimulation = () => {
-    if (simulateTimer) {
-        clearInterval(simulateTimer);
-        simulateTimer = null;
-    }
-};
 const initMap = async () => {
     if (!selected.value || !mapRef.value) {
         return;
@@ -105,10 +170,16 @@ const initMap = async () => {
     const L = await ensureLeaflet();
     const store = [13.779876, 109.228232];
     
-    const lat = Number(selected.value?.order?.latitude || 10.7769);
-    const lng = Number(selected.value?.order?.longitude || 106.7009);
-    
-    const dest = [lat, lng];
+    const lat = Number(selected.value?.deliveryLat ?? selected.value?.order?.latitude);
+    const lng = Number(selected.value?.deliveryLng ?? selected.value?.order?.longitude);
+    const validLat = Number.isFinite(lat) && Math.abs(lat) <= 90;
+    const validLng = Number.isFinite(lng) && Math.abs(lng) <= 180;
+    hasValidDestination.value = validLat && validLng;
+    mapInfo.value = hasValidDestination.value ? "" : "Đơn hàng này chưa có toạ độ giao hàng hợp lệ.";
+    const dest = hasValidDestination.value ? [lat, lng] : store;
+    if (map && map.getContainer && map.getContainer() !== mapRef.value) {
+        destroyMap();
+    }
     if (!map) {
         map = L.map(mapRef.value).setView([(store[0] + dest[0]) / 2, (store[1] + dest[1]) / 2], 12);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19}).addTo(map);
@@ -124,26 +195,102 @@ const initMap = async () => {
     if (destMarker) {
         map.removeLayer(destMarker);
     }
-    routeLine = L.polyline([store, dest], {color: "#2563eb", weight: 4}).addTo(map);
+    routeLine = hasValidDestination.value ? L.polyline([store, dest], {color: "#2563eb", weight: 4}).addTo(map) : null;
     marker = L.marker(store).addTo(map).bindPopup("Cửa hàng");
-    destMarker = L.marker(dest).addTo(map).bindPopup("Điểm giao");
-    map.fitBounds(routeLine.getBounds(), {padding: [20, 20]});
+    destMarker = L.marker(dest).addTo(map).bindPopup(hasValidDestination.value ? "Điểm giao" : "Chưa có toạ độ giao hàng");
+    if (routeLine) {
+        map.fitBounds(routeLine.getBounds(), {padding: [20, 20]});
+    } else {
+        map.setView(store, 13);
+    }
+};
+const persistCurrentStatus = async () => {
+    await persistStatus();
+    await fetchDetail(selected.value.order.id);
+    refreshActionUI();
+};
+const startDeliverySimulation = async () => {
+    if (!selected.value?.order?.id || simulatingDelivery.value) {
+        return;
+    }
+    if (!hasValidDestination.value) {
+        showActionModal("Đơn hàng chưa có toạ độ giao hàng hợp lệ nên không thể mô phỏng giao.");
+        return;
+    }
+    if (!(currentOrderStatus.value === "PLACED_UNPAID" || currentOrderStatus.value === "PLACED_PAID" || currentOrderStatus.value === "DELIVERY_FAILED")) {
+        return;
+    }
+    updatingStatus.value = true;
+    simulatingDelivery.value = true;
+    try {
+        if (currentOrderStatus.value === "PLACED_PAID") {
+            status.value = "SHIPPING_PAID";
+            retryShippingStatus.value = "SHIPPING_PAID";
+        } else if (currentOrderStatus.value === "PLACED_UNPAID") {
+            status.value = "SHIPPING_UNPAID";
+            retryShippingStatus.value = "SHIPPING_UNPAID";
+        } else {
+            status.value = retryShippingStatus.value || "SHIPPING_UNPAID";
+        }
+        await persistCurrentStatus();
+        await nextTick();
+        await initMap();
+        showActionModal("Đơn hàng đã chuyển sang trạng thái đang giao.");
+    } finally {
+        updatingStatus.value = false;
+    }
+    const points = routeLine ? routeLine.getLatLngs() : null;
+    const totalSteps = 50;
+    let step = 0;
     clearSimulation();
-    if ((status.value || "").startsWith("SHIPPING")) {
-        const points = routeLine.getLatLngs();
-        let step = 0;
-        simulateTimer = setInterval(async () => {
-            step += 1;
-            if (step >= 30) {
-                clearSimulation();
-                status.value = "DELIVERED_SUCCESS";
-                await updateStatus();
-                return;
-            }
-            const latNow = points[0].lat + (points[1].lat - points[0].lat) * (step / 30);
-            const lngNow = points[0].lng + (points[1].lng - points[0].lng) * (step / 30);
+    simulatingDelivery.value = true;
+    simulateTimer = setInterval(async () => {
+        step += 1;
+        if (points && points.length >= 2 && marker) {
+            const latNow = points[0].lat + (points[1].lat - points[0].lat) * (step / totalSteps);
+            const lngNow = points[0].lng + (points[1].lng - points[0].lng) * (step / totalSteps);
             marker.setLatLng([latNow, lngNow]);
-        }, 500);
+        }
+        if (step >= totalSteps) {
+            clearSimulation();
+            updatingStatus.value = true;
+            try {
+                const success = Math.random() < 0.5;
+                status.value = success ? "DELIVERED_SUCCESS" : "DELIVERY_FAILED";
+                await persistCurrentStatus();
+                await nextTick();
+                await initMap();
+                if (success) {
+                    showActionModal("Đã giao thành công đơn hàng!");
+                } else {
+                    showActionModal("Giao hàng thất bại. Vui lòng thử giao lại hoặc huỷ đơn.");
+                }
+            } finally {
+                updatingStatus.value = false;
+            }
+        }
+    }, 100);
+};
+const cancelOrder = async () => {
+    if (!selected.value?.order?.id || !canCancelOrder.value) {
+        return;
+    }
+    openConfirmModal("Bạn có chắc chắn muốn huỷ và xoá đơn hàng này không?");
+};
+const confirmCancelOrder = async () => {
+    if (!selected.value?.order?.id || !canCancelOrder.value) {
+        closeConfirmModal();
+        return;
+    }
+    closeConfirmModal();
+    updatingStatus.value = true;
+    try {
+        const id = selected.value.order.id;
+        await remove(id);
+        closeDetailModal();
+        showActionModal("Đã huỷ và xoá đơn hàng thành công.");
+    } finally {
+        updatingStatus.value = false;
     }
 };
 watch(selected, async () => {
@@ -156,17 +303,10 @@ watch(selected, async () => {
     }
     await nextTick();
     await initMap();
-});
-watch(status, async () => {
-    if (selected.value && detailModalOpen.value) {
-        await initMap();
-    }
+    refreshActionUI();
 });
 onUnmounted(() => {
-    clearSimulation();
-    if (map) {
-        map.remove();
-    }
+    destroyMap();
 });
 onMounted(async () => {
     const queryOrderId = Number(route.query.orderId || "");
@@ -227,13 +367,16 @@ onMounted(async () => {
                 <div style="margin-top:12px;">
                     <div class="form-group">
                         <label>Trạng thái đơn hàng</label>
-                        <select v-model="status">
-                            <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-                        </select>
+                        <div class="status-message" style="margin-bottom: 0;">{{ statusLabel(currentOrderStatus) }}</div>
                     </div>
-                    <button class="btn btn-primary" type="button" @click="updateStatus" v-if="canUpdateStatus">
-                        Cập nhật trạng thái
-                    </button>
+                    <div class="table-actions" style="margin-top: 8px;">
+                        <button class="btn btn-primary" type="button" @click="startDeliverySimulation" :disabled="!canStartDelivery || updatingStatus || simulatingDelivery || deliveryCompleted" :style="deliveryCompleted ? 'opacity:0.45;cursor:not-allowed;' : ''">
+                            {{ simulatingDelivery ? "Đang giao hàng..." : deliveryButtonLabel }}
+                        </button>
+                        <button class="btn btn-action-solid" type="button" @click="cancelOrder" v-if="canCancelOrder" :disabled="updatingStatus">
+                            Huỷ đơn
+                        </button>
+                    </div>
                 </div>
                 <table style="margin-top:10px;">
                     <thead>
@@ -255,7 +398,33 @@ onMounted(async () => {
                 </table>
                 <div class="card" style="margin-top:12px;">
                     <h4>Bản đồ giao hàng</h4>
+                    <div class="status-message status-error" v-if="mapInfo">{{ mapInfo }}</div>
                     <div ref="mapRef" style="height:360px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: confirmModalOpen}" v-if="confirmModalOpen">
+            <div class="admin-modal-panel" style="max-width: 420px;">
+                <div class="modal-header">
+                    <h4>Xác nhận</h4>
+                    <button type="button" class="btn btn-outline-primary" @click="closeConfirmModal">Đóng</button>
+                </div>
+                <div class="status-message">{{ confirmMessage }}</div>
+                <div class="admin-form-actions">
+                    <button class="btn btn-action-solid" type="button" @click="confirmCancelOrder">Xác nhận</button>
+                    <button class="btn btn-outline-primary" type="button" @click="closeConfirmModal">Huỷ</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: actionModalOpen}" v-if="actionModalOpen">
+            <div class="admin-modal-panel" style="max-width: 420px;">
+                <div class="modal-header">
+                    <h4>Thông báo</h4>
+                    <button type="button" class="btn btn-outline-primary" @click="closeActionModal">Đóng</button>
+                </div>
+                <div class="status-message">{{ actionMessage }}</div>
+                <div class="admin-form-actions">
+                    <button class="btn btn-primary" type="button" @click="closeActionModal">OK</button>
                 </div>
             </div>
         </div>

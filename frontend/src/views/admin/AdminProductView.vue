@@ -31,6 +31,17 @@ const priceRanges = [
 const listRef = ref(null);
 
 const displayedProducts = computed(() => state.rows || []);
+const visiblePages = computed(() => {
+    const total = Number(state.totalPages || 0);
+    const current = Number(state.page || 0);
+    if (total <= 1) {
+        return total === 1 ? [0] : [];
+    }
+    const start = Math.max(0, current - 2);
+    const end = Math.min(total - 1, start + 4);
+    const adjustedStart = Math.max(0, end - 4);
+    return Array.from({length: end - adjustedStart + 1}, (_, index) => adjustedStart + index);
+});
 const sizeTotalQuantity = computed(() => (state.sizes || []).reduce((total, size) => {
     const qty = Number(form.sizeQtyMap?.[String(size.id)] || 0);
     return total + (Number.isFinite(qty) ? Math.max(0, qty) : 0);
@@ -179,6 +190,15 @@ const clearFilters = async () => {
     await load();
     await scrollToResults();
 };
+const goToPage = async (page) => {
+    const targetPage = Number(page);
+    if (!Number.isInteger(targetPage) || targetPage < 0 || targetPage >= Number(state.totalPages || 0) || targetPage === state.page) {
+        return;
+    }
+    state.page = targetPage;
+    await load();
+    await scrollToResults();
+};
 </script>
 
 <template>
@@ -229,6 +249,19 @@ const clearFilters = async () => {
                         </table>
                     </div>
                 </div>
+                <div class="pagination-wrapper" v-if="state.totalPages > 1">
+                    <ul class="pagination">
+                        <li class="page-item">
+                            <button class="page-link" type="button" @click="prev" :disabled="state.page <= 0">Trước</button>
+                        </li>
+                        <li class="page-item" v-for="page in visiblePages" :key="'admin-page-'+page" :class="{ active: state.page === page }">
+                            <button class="page-link" type="button" @click="goToPage(page)">{{ page + 1 }}</button>
+                        </li>
+                        <li class="page-item">
+                            <button class="page-link" type="button" @click="next" :disabled="state.page + 1 >= state.totalPages">Sau</button>
+                        </li>
+                    </ul>
+                </div>
             </div>
             <div class="admin-product-filter">
                 <form class="card admin-product-filter-form" @submit.prevent="applyFilters">
@@ -268,11 +301,6 @@ const clearFilters = async () => {
                     </div>
                 </form>
             </div>
-        </div>
-        <div class="d-flex justify-content-center align-items-center gap-3 mt-3 text-center">
-            <button class="btn btn-outline-primary" type="button" @click="prev">Trang trước</button>
-            <div class="small text-muted fw-semibold">Trang {{ state.page + 1 }} / {{ state.totalPages || 1 }}</div>
-            <button class="btn btn-outline-primary" type="button" @click="next">Trang sau</button>
         </div>
         <div class="modal-backdrop" :class="{ open: modalOpen }" @click.self="closeModal">
             <div class="admin-modal-panel">

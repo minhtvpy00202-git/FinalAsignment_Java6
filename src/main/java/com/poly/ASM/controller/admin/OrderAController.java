@@ -3,6 +3,7 @@ package com.poly.ASM.controller.admin;
 import com.poly.ASM.dto.common.ApiResponse;
 import com.poly.ASM.entity.order.Order;
 import com.poly.ASM.exception.ApiException;
+import com.poly.ASM.repository.review.ProductReviewRepository;
 import com.poly.ASM.service.notification.NotificationService;
 import com.poly.ASM.service.order.OrderDetailService;
 import com.poly.ASM.service.order.OrderService;
@@ -37,6 +38,7 @@ public class OrderAController {
     private final OrderService orderService;
     private final OrderDetailService orderDetailService;
     private final NotificationService notificationService;
+    private final ProductReviewRepository productReviewRepository;
     private final JdbcTemplate jdbcTemplate;
     private final PayosPaymentService payosPaymentService;
 
@@ -89,6 +91,7 @@ public class OrderAController {
     @Transactional
     public ResponseEntity<ApiResponse<?>> delete(@PathVariable("id") Long id) {
         notificationService.deleteByOrderId(id);
+        productReviewRepository.deleteByOrderId(id);
         orderDetailService.deleteByOrderId(id);
         orderService.deleteById(id);
         return ResponseEntity.ok(ApiResponse.success("Xóa đơn hàng thành công", null));
@@ -131,8 +134,13 @@ public class OrderAController {
         if ("DELIVERED_SUCCESS".equals(currentStatus) || "DONE".equals(currentStatus)) {
             return "DELIVERED_SUCCESS".equals(nextStatus) || "DONE".equals(nextStatus);
         }
-        if ("DELIVERY_FAILED".equals(currentStatus) || "CANCEL".equals(currentStatus)) {
-            return "DELIVERY_FAILED".equals(nextStatus) || "CANCEL".equals(nextStatus);
+        if ("DELIVERY_FAILED".equals(currentStatus)) {
+            return "DELIVERY_FAILED".equals(nextStatus)
+                    || "SHIPPING_UNPAID".equals(nextStatus)
+                    || "SHIPPING_PAID".equals(nextStatus);
+        }
+        if ("CANCEL".equals(currentStatus)) {
+            return "CANCEL".equals(nextStatus);
         }
         return currentStatus.equals(nextStatus);
     }
@@ -167,6 +175,7 @@ public class OrderAController {
     }
 
     private Optional<double[]> findOrderCoordinates(Long orderId) {
+        ensureOrderCoordinateColumns();
         try {
             return jdbcTemplate.query("select * from orders where id = ?", rs -> {
                 if (!rs.next()) {
@@ -205,6 +214,22 @@ public class OrderAController {
             }, orderId);
         } catch (Exception ex) {
             return Optional.empty();
+        }
+    }
+
+    private void ensureOrderCoordinateColumns() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'delivery_lat') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivery_lat FLOAT NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'delivery_lng') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivery_lng FLOAT NULL;
+                END
+            """);
+        } catch (Exception ignored) {
         }
     }
 }

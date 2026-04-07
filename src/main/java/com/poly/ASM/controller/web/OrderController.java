@@ -521,6 +521,7 @@ public class OrderController {
     }
 
     private Optional<ColumnPair> findLatLngColumns(Long orderId) {
+        ensureOrderCoordinateColumns();
         try {
             return jdbcTemplate.query("select * from orders where id = ?", rs -> {
                 if (!rs.next()) {
@@ -547,6 +548,22 @@ public class OrderController {
             }, orderId);
         } catch (Exception ex) {
             return Optional.empty();
+        }
+    }
+
+    private void ensureOrderCoordinateColumns() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'delivery_lat') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivery_lat FLOAT NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'delivery_lng') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivery_lng FLOAT NULL;
+                END
+            """);
+        } catch (Exception ignored) {
         }
     }
 
