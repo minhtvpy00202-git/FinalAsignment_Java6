@@ -120,6 +120,7 @@ watch(() => route.query.orderId, initOrderByQuery);
                 <div class="order-detail-line">Ngày đặt: <span>{{ formatOrderDateTime(data.order?.createDate) }}</span></div>
                 <div class="order-detail-line">Trạng thái: <span class="badge order-status-badge">{{ statusLabel(data.order?.status) }}</span></div>
                 <div class="order-detail-line">Địa chỉ: <span>{{ data.order?.address }}</span></div>
+                <div class="order-detail-line">Số điện thoại giao hàng: <span>{{ data.order?.shippingPhone || "Chưa có" }}</span></div>
                 <div class="order-detail-line">Ngày nhận hàng dự kiến: <strong>{{ expectedDeliveryDate }}</strong></div>
             </div>
         </div>

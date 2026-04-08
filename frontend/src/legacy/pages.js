@@ -341,12 +341,16 @@ const CheckoutPage = {
             wardCode: "",
             lat: "",
             lng: "",
+            shippingPhone: "",
             paymentMethod: "BANK"
         });
         const result = ref(null);
         const error = ref("");
         const load = async () => {
             checkout.value = (await api.orderWorkflow.checkoutData()).data || {items: [], totalPrice: 0};
+            if (!form.shippingPhone) {
+                form.shippingPhone = checkout.value?.shippingPhone || "";
+            }
         };
         const submit = async () => {
             try {
@@ -586,23 +590,31 @@ const SignUpPage = {
 
 const EditProfilePage = {
     setup() {
-        const form = reactive({fullname: "", email: ""});
+        const form = reactive({fullname: "", email: "", phone: "", address: "", photo: "", photoFile: null});
         const message = ref("");
+        const onPhotoChange = (event) => {
+            form.photoFile = event?.target?.files?.[0] || null;
+        };
         const load = async () => {
             const me = (await api.account.profile()).data || {};
             form.fullname = me.fullname || "";
             form.email = me.email || "";
+            form.phone = me.phone || "";
+            form.address = me.address || "";
+            form.photo = me.photo || "";
+            form.photoFile = null;
         };
         const save = async () => {
             try {
                 await api.account.updateProfile(form);
                 message.value = "Cập nhật thành công";
+                await load();
             } catch (e) {
                 message.value = e.message;
             }
         };
         onMounted(load);
-        return {form, message, save};
+        return {form, message, save, onPhotoChange};
     },
     template: `
       <div class="row justify-content-center"><div class="col-md-7"><div class="card shadow-sm"><div class="card-header">Hồ sơ cá nhân</div><div class="card-body">

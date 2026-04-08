@@ -13,6 +13,8 @@ public interface AccountService {
 
     Optional<Account> findByEmail(String email);
 
+    Optional<Account> findByPhone(String phone);
+
     Account create(Account account);
 
     Account update(Account account);

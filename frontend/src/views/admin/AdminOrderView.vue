@@ -132,16 +132,20 @@ const forceMapResize = () => {
     setTimeout(() => map && map.invalidateSize(), 420);
 };
 const openDetail = async (id) => {
-    await fetchDetail(id);
-    const firstOption = statusOptions.value[0]?.value;
-    if (firstOption && !statusOptions.value.some((item) => item.value === status.value)) {
-        status.value = firstOption;
+    try {
+        await fetchDetail(id);
+        const firstOption = statusOptions.value[0]?.value;
+        if (firstOption && !statusOptions.value.some((item) => item.value === status.value)) {
+            status.value = firstOption;
+        }
+        detailModalOpen.value = true;
+        await nextTick();
+        await initMap();
+        refreshActionUI();
+        forceMapResize();
+    } catch (e) {
+        showActionModal("Không tải được chi tiết đơn hàng. Vui lòng thử lại.");
     }
-    detailModalOpen.value = true;
-    await nextTick();
-    await initMap();
-    refreshActionUI();
-    forceMapResize();
 };
 const closeDetailModal = () => {
     detailModalOpen.value = false;
@@ -416,6 +420,7 @@ onMounted(async () => {
                     <button class="btn btn-outline-primary" type="button" @click="closeDetailModal">Đóng</button>
                 </div>
                 <div>Mã đơn: <strong>{{ selected.order.id }}</strong> - Địa chỉ: <span>{{ selected.order.address }}</span></div>
+                <div style="margin-top:4px;">SĐT giao hàng: <strong>{{ selected.order.shippingPhone || "Chưa có" }}</strong></div>
                 <div style="margin-top:12px;">
                     <div class="form-group">
                         <label>Trạng thái đơn hàng</label>

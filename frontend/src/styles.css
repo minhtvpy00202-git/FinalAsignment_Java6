@@ -1312,6 +1312,59 @@ textarea:focus {
     color: #1a1a1a;
 }
 
+.profile-menu-wrap {
+    position: relative;
+}
+
+.profile-menu-trigger {
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    border-radius: 999px;
+    height: 36px;
+    padding: 4px 10px 4px 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #e5e7eb;
+}
+
+.profile-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 210px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+    z-index: 1200;
+    overflow: hidden;
+}
+
+.profile-dropdown-item {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: #ffffff;
+    padding: 10px 12px;
+    font-size: 14px;
+}
+
+.profile-dropdown-item:hover {
+    background: #f8fafc;
+}
+
+.profile-dropdown-item--danger {
+    color: #b91c1c;
+}
+
 /* ========== REVIEW BOX ========== */
 .review-box {
     background-color: #f8fafc;

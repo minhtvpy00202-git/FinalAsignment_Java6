@@ -22,7 +22,7 @@ watch(() => route.query.id, loadByQuery);
 const quantity = ref(1);
 const selectedSizeId = ref("");
 const selectedSizeName = ref("");
-const actionMessage = ref("Vui lòng chọn size và số lượng.");
+const actionMessage = ref("");
 const sizeWeight = (name) => {
     const map = {
         "XS": 1, "S": 2, "M": 3, "L": 4, "XL": 5, "XXL": 6, "2XL": 6, "3XL": 7, "XXXL": 7
@@ -52,6 +52,16 @@ const sizeOptions = computed(() => {
         return String(a.name).localeCompare(String(b.name));
     });
 });
+const isOutOfStock = computed(() => {
+    const product = data.value?.product;
+    if (!product) {
+        return false;
+    }
+    if (Array.isArray(product.productSizes) && product.productSizes.length) {
+        return product.productSizes.every((item) => Number(item?.quantity || 0) <= 0);
+    }
+    return sizeOptions.value.length === 0;
+});
 const chooseSize = (option) => {
     selectedSizeId.value = option.id;
     selectedSizeName.value = option.name;
@@ -63,9 +73,16 @@ const decreaseQty = () => {
     }
 };
 const increaseQty = () => {
+    if (isOutOfStock.value) {
+        return;
+    }
     quantity.value += 1;
 };
 const addToCart = async () => {
+    if (isOutOfStock.value) {
+        actionMessage.value = "Tạm hết hàng";
+        return;
+    }
     if (!selectedSizeId.value) {
         actionMessage.value = "Vui lòng chọn size trước khi thêm vào giỏ hàng.";
         return;
@@ -78,6 +95,10 @@ const addToCart = async () => {
     }
 };
 const checkoutNow = async () => {
+    if (isOutOfStock.value) {
+        actionMessage.value = "Tạm hết hàng";
+        return;
+    }
     if (!selectedSizeId.value) {
         actionMessage.value = "Vui lòng chọn size trước khi thanh toán.";
         return;
@@ -89,6 +110,18 @@ const checkoutNow = async () => {
         actionMessage.value = e.message;
     }
 };
+watch(isOutOfStock, (value) => {
+    if (value) {
+        actionMessage.value = "Tạm hết hàng";
+        selectedSizeId.value = "";
+        selectedSizeName.value = "";
+        quantity.value = 1;
+        return;
+    }
+    if (!actionMessage.value || actionMessage.value === "Tạm hết hàng") {
+        actionMessage.value = "Vui lòng chọn size và số lượng.";
+    }
+}, {immediate: true});
 const reviews = computed(() => Array.isArray(data.value?.reviews) ? data.value.reviews : []);
 const reviewCount = computed(() => reviews.value.length);
 const avgRating = computed(() => {
@@ -190,20 +223,20 @@ const reviewImages = (review) => {
                     
                     <div class="qty-control">
                         <span class="qty-label">Số lượng</span>
-                        <button type="button" class="qty-btn" @click="decreaseQty">-</button>
-                        <input type="number" v-model.number="quantity" min="1">
-                        <button type="button" class="qty-btn" @click="increaseQty">+</button>
+                        <button type="button" class="qty-btn" @click="decreaseQty" :disabled="isOutOfStock">-</button>
+                        <input type="number" v-model.number="quantity" min="1" :disabled="isOutOfStock">
+                        <button type="button" class="qty-btn" @click="increaseQty" :disabled="isOutOfStock">+</button>
                     </div>
                     
                     <div class="detail-message-wrap" v-if="actionMessage">
-                        <div class="status-message" :class="{'status-error': actionMessage.includes('Vui lòng')}">
+                        <div class="status-message" :class="{'status-error': actionMessage.includes('Vui lòng') || actionMessage === 'Tạm hết hàng'}">
                             {{ actionMessage }}
                         </div>
                     </div>
                     
                     <div class="detail-actions">
-                        <button class="btn btn-primary" type="button" @click="addToCart">Thêm vào giỏ hàng</button>
-                        <button class="btn btn-outline-primary" type="button" @click="checkoutNow">Thanh toán ngay</button>
+                        <button class="btn btn-primary" type="button" @click="addToCart" :disabled="isOutOfStock">Thêm vào giỏ hàng</button>
+                        <button class="btn btn-outline-primary" type="button" @click="checkoutNow" :disabled="isOutOfStock">Thanh toán ngay</button>
                     </div>
                 </div>
             </section>

@@ -1,5 +1,5 @@
 <script setup>
-import {onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {api} from "@/api";
 import {useSession} from "@/composables/useSession";
@@ -9,7 +9,29 @@ const {state, isAuthenticated, isAdmin, refreshSession, clearSession} = useSessi
 const notifications = ref([]);
 const unreadCount = ref(0);
 const bellOpen = ref(false);
+const profileOpen = ref(false);
+const bellRef = ref(null);
+const profileRef = ref(null);
 let pollTimer = null;
+const backendUrl = import.meta.env.VITE_BACKEND_URL || "";
+const displayName = computed(() => String(state.me?.fullname || state.me?.username || "Người dùng"));
+const defaultAvatar = computed(() => {
+    const seed = encodeURIComponent(displayName.value);
+    return `https://ui-avatars.com/api/?background=F4F4F5&color=111827&name=${seed}`;
+});
+const profilePhotoUrl = computed(() => {
+    const raw = String(state.me?.photo || "").trim();
+    if (!raw) {
+        return defaultAvatar.value;
+    }
+    if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:") || raw.startsWith("/")) {
+        return raw;
+    }
+    if (backendUrl) {
+        return `${backendUrl}/images/${encodeURIComponent(raw)}`;
+    }
+    return `/images/${encodeURIComponent(raw)}`;
+});
 
 const loadNotifications = async () => {
     if (!isAuthenticated.value) {
@@ -42,8 +64,30 @@ const stopPolling = () => {
 const toggleBell = async () => {
     bellOpen.value = !bellOpen.value;
     if (bellOpen.value) {
+        profileOpen.value = false;
+    }
+    if (bellOpen.value) {
         await loadNotifications();
     }
+};
+const toggleProfile = () => {
+    profileOpen.value = !profileOpen.value;
+    if (profileOpen.value) {
+        bellOpen.value = false;
+    }
+};
+const onGlobalClick = (event) => {
+    const target = event?.target;
+    if (bellRef.value && !bellRef.value.contains(target)) {
+        bellOpen.value = false;
+    }
+    if (profileRef.value && !profileRef.value.contains(target)) {
+        profileOpen.value = false;
+    }
+};
+const goProfile = async () => {
+    profileOpen.value = false;
+    await router.push("/account/edit-profile");
 };
 const openNotification = async (notification) => {
     if (!notification?.id) {
@@ -88,6 +132,7 @@ onMounted(async () => {
     await refreshSession();
     await loadNotifications();
     startPolling();
+    document.addEventListener("click", onGlobalClick);
 });
 
 watch(isAuthenticated, async (value) => {
@@ -102,6 +147,7 @@ watch(isAuthenticated, async (value) => {
 
 onUnmounted(() => {
     stopPolling();
+    document.removeEventListener("click", onGlobalClick);
 });
 </script>
 
@@ -146,8 +192,16 @@ onUnmounted(() => {
                                 <div class="notification-empty" v-if="!notifications.length">Chưa có thông báo</div>
                             </div>
                         </div>
-                        <span class="user-name">{{ state.me?.username }}</span>
-                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="logout">Đăng xuất</button>
+                        <div class="profile-menu-wrap" ref="profileRef">
+                            <button class="profile-menu-trigger" type="button" @click="toggleProfile">
+                                <img :src="profilePhotoUrl" alt="avatar" class="profile-avatar">
+                                <span class="user-name">{{ displayName }}</span>
+                            </button>
+                            <div class="profile-dropdown" v-if="profileOpen">
+                                <button class="profile-dropdown-item" type="button" @click="goProfile">Quản lý tài khoản</button>
+                                <button class="profile-dropdown-item profile-dropdown-item--danger" type="button" @click="logout">Đăng xuất</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

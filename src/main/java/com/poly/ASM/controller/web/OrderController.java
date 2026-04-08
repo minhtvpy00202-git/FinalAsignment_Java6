@@ -66,9 +66,11 @@ public class OrderController {
 
     @GetMapping("/checkout")
     public ResponseEntity<ApiResponse<?>> checkoutForm() {
+        Account user = authService.getUser();
         Map<String, Object> data = new HashMap<>();
         data.put("items", cartService.getCartItems());
         data.put("totalPrice", cartService.getTotalPrice());
+        data.put("shippingPhone", user != null ? user.getPhone() : "");
         return ResponseEntity.ok(ApiResponse.success("Lấy dữ liệu checkout thành công", data));
     }
 
@@ -78,6 +80,7 @@ public class OrderController {
                                                    @RequestParam(value = "addressDetail", required = false) String addressDetail,
                                                    @RequestParam(value = "provinceCode", required = false) String provinceCode,
                                                    @RequestParam(value = "wardCode", required = false) String wardCode,
+                                                   @RequestParam(value = "shippingPhone", required = false) String shippingPhone,
                                                    @RequestParam(value = "lat", required = false) Double lat,
                                                    @RequestParam(value = "lng", required = false) Double lng,
                                                    @RequestParam("paymentMethod") String paymentMethod) {
@@ -122,6 +125,10 @@ public class OrderController {
         if (resolvedAddress == null || resolvedAddress.isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập địa chỉ nhận hàng hợp lệ.", null));
         }
+        String resolvedShippingPhone = firstNonBlank(shippingPhone, user.getPhone());
+        if (resolvedShippingPhone == null || resolvedShippingPhone.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập số điện thoại giao hàng.", null));
+        }
         Order order = new Order();
         order.setAccount(user);
         order.setAddress(resolvedAddress);
@@ -129,6 +136,7 @@ public class OrderController {
         Order savedOrder = orderService.create(order);
         updateOrderAdministrative(savedOrder.getId(), normalizedProvinceCode, normalizedWardCode);
         updateOrderCoordinates(savedOrder.getId(), lat, lng);
+        updateOrderShippingPhone(savedOrder.getId(), resolvedShippingPhone);
         notificationService.notifyOrderPlacedForUser(user, savedOrder);
         notificationService.notifyOrderPlacedForAdmins(savedOrder);
         for (CartItem item : items) {
@@ -355,6 +363,7 @@ public class OrderController {
             Map<String, Object> item = new HashMap<>();
             item.put("id", order.getId());
             item.put("address", order.getAddress());
+            item.put("shippingPhone", findOrderShippingPhone(order.getId()).orElse(""));
             item.put("status", order.getStatus());
             item.put("createDate", order.getCreateDate());
             result.add(item);
@@ -454,6 +463,7 @@ public class OrderController {
         }
         orderData.put("id", order.getId());
         orderData.put("address", order.getAddress());
+        orderData.put("shippingPhone", findOrderShippingPhone(order.getId()).orElse(""));
         orderData.put("status", order.getStatus());
         orderData.put("createDate", order.getCreateDate());
         return orderData;
@@ -604,6 +614,46 @@ public class OrderController {
                 IF COL_LENGTH('dbo.orders', 'ward_code') IS NULL
                 BEGIN
                     ALTER TABLE dbo.orders ADD ward_code NVARCHAR(20) NULL;
+                END
+            """);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void updateOrderShippingPhone(Long orderId, String shippingPhone) {
+        if (orderId == null) {
+            return;
+        }
+        ensureOrderShippingPhoneColumn();
+        try {
+            jdbcTemplate.update("update dbo.orders set shipping_phone = ? where id = ?", shippingPhone, orderId);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private Optional<String> findOrderShippingPhone(Long orderId) {
+        if (orderId == null) {
+            return Optional.empty();
+        }
+        ensureOrderShippingPhoneColumn();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select shipping_phone from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private void ensureOrderShippingPhoneColumn() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'shipping_phone') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD shipping_phone NVARCHAR(20) NULL;
                 END
             """);
         } catch (Exception ignored) {

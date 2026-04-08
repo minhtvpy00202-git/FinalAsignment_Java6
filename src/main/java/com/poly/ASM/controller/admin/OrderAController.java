@@ -44,7 +44,10 @@ public class OrderAController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<?>> index() {
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng quản trị thành công", orderService.findAll()));
+        List<Order> filtered = orderService.findAll().stream()
+                .filter(order -> order != null && !"PENDING_PAYMENT".equals(order.getStatus()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng quản trị thành công", filtered));
     }
 
     @GetMapping("/{id}")
@@ -57,6 +60,7 @@ public class OrderAController {
         Map<String, Object> orderData = new HashMap<>();
         orderData.put("id", current.getId());
         orderData.put("address", current.getAddress());
+        orderData.put("shippingPhone", findOrderShippingPhone(current.getId()).orElse(""));
         orderData.put("status", current.getStatus());
         orderData.put("createDate", current.getCreateDate());
         List<Map<String, Object>> details = orderDetailService.findByOrderId(id).stream().map(detail -> {
@@ -227,6 +231,32 @@ public class OrderAController {
                 IF COL_LENGTH('dbo.orders', 'delivery_lng') IS NULL
                 BEGIN
                     ALTER TABLE dbo.orders ADD delivery_lng FLOAT NULL;
+                END
+            """);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private Optional<String> findOrderShippingPhone(Long orderId) {
+        ensureOrderShippingPhoneColumn();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select shipping_phone from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private void ensureOrderShippingPhoneColumn() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'shipping_phone') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD shipping_phone NVARCHAR(20) NULL;
                 END
             """);
         } catch (Exception ignored) {

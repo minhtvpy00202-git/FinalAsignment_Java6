@@ -23,7 +23,10 @@ const clearSession = () => {
 };
 
 export const useSession = () => {
-    const isAuthenticated = computed(() => !!state.me);
+    const isAuthenticated = computed(() => {
+        const username = String(state.me?.username || "").trim();
+        return username !== "" && username !== "anonymousUser";
+    });
     const isAdmin = computed(() => {
         const roles = state.me?.roles || [];
         return roles.some((role) => {

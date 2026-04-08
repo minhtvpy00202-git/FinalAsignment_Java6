@@ -31,6 +31,11 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    public Optional<Account> findByPhone(String phone) {
+        return accountRepository.findByPhone(phone);
+    }
+
+    @Override
     public Account create(Account account) {
         return accountRepository.save(account);
     }

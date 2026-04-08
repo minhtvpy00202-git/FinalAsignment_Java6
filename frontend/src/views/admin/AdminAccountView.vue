@@ -72,9 +72,9 @@ const currentUsername = computed(() => state.me?.username || "");
                             <label>Username</label>
                             <input type="text" v-model="form.username" :readonly="editing" required class="form-control">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" v-if="!editing">
                             <label>Mật khẩu</label>
-                            <input type="password" v-model="form.password" class="form-control" :placeholder="editing ? 'Để trống nếu không đổi' : 'Nhập mật khẩu'" :required="!editing">
+                            <input type="password" v-model="form.password" class="form-control" placeholder="Nhập mật khẩu" required>
                         </div>
                         <div class="form-group">
                             <label>Họ tên</label>

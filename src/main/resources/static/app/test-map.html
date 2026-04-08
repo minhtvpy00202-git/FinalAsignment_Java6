@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Goong API Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/@goongmaps/goong-js/dist/goong-js.css" rel="stylesheet">
+    <style>
+        #map { height: 400px; width: 100%; }
+    </style>
+</head>
+<body>
+    <h3>Goong Test</h3>
+    <div id="map"></div>
+    <div id="status">Đang tải...</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@goongmaps/goong-js/dist/goong-js.js"></script>
+    <script>
+        const API_KEY = "";
+        const statusEl = document.getElementById("status");
+
+        if (!API_KEY) {
+            statusEl.innerText = "Chưa có Goong API key. Hãy điền API_KEY trong test-map.html.";
+            statusEl.style.color = "red";
+        } else {
+            try {
+                goongjs.accessToken = API_KEY;
+                new goongjs.Map({
+                    container: "map",
+                    style: `https://tiles.goong.io/assets/goong_map_web.json?api_key=${encodeURIComponent(API_KEY)}`,
+                    center: [108.2772, 14.0583],
+                    zoom: 6
+                });
+                statusEl.innerText = "Goong hiển thị thành công.";
+                statusEl.style.color = "green";
+            } catch (e) {
+                statusEl.innerText = "Lỗi Goong: " + e.message;
+                statusEl.style.color = "red";
+            }
+        }
+    </script>
+</body>
+</html>

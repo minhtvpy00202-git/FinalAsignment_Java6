@@ -6,6 +6,7 @@ import com.poly.ASM.security.JwtCookieService;
 import com.poly.ASM.security.JwtService;
 import com.poly.ASM.security.TokenBlacklistService;
 import com.poly.ASM.security.CustomUserDetailsService;
+import com.poly.ASM.service.user.AccountService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class AuthRestController {
     private final TokenBlacklistService tokenBlacklistService;
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtCookieService jwtCookieService;
+    private final AccountService accountService;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<?>> login(@RequestBody LoginRequest request, HttpServletResponse response) {
@@ -149,14 +151,18 @@ public class AuthRestController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<?>> me(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
+        var account = accountService.findByUsername(authentication.getName()).orElse(null);
         return ResponseEntity.ok(
                 ApiResponse.success(
                         "Lấy thông tin tài khoản thành công",
                         Map.of(
                                 "username", authentication.getName(),
+                                "fullname", account != null ? account.getFullname() : "",
+                                "photo", account != null ? account.getPhoto() : "",
+                                "email", account != null ? account.getEmail() : "",
                                 "roles", authentication.getAuthorities().stream().map(a -> a.getAuthority()).toList()
                         )
                 )

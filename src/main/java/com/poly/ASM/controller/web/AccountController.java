@@ -94,6 +94,12 @@ public class AccountController {
         if (byEmail.isPresent() && !byEmail.get().getUsername().equals(user.getUsername())) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Email đã tồn tại", null));
         }
+        if (phone != null && !phone.isBlank()) {
+            Optional<Account> byPhone = accountService.findByPhone(phone.trim());
+            if (byPhone.isPresent() && !byPhone.get().getUsername().equals(user.getUsername())) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Số điện thoại đã tồn tại", null));
+            }
+        }
 
         user.setFullname(fullname);
         user.setEmail(email);
