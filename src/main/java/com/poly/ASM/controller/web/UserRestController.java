@@ -42,6 +42,9 @@ public class UserRestController {
         if (request.getPassword() == null || request.getPassword().isBlank()) {
             return ResponseEntity.badRequest().body("Password is required");
         }
+        if (!isStrongPassword(request.getPassword())) {
+            return ResponseEntity.badRequest().body("Password must be at least 8 chars with upper/lowercase, number and special character");
+        }
         if (accountService.findByUsername(request.getUsername()).isPresent()) {
             return ResponseEntity.status(409).body("Username already exists");
         }
@@ -57,6 +60,9 @@ public class UserRestController {
         Optional<Account> existing = accountService.findByUsername(username);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
+        }
+        if (request.getPassword() != null && !request.getPassword().isBlank() && !isStrongPassword(request.getPassword())) {
+            return ResponseEntity.badRequest().body("Password must be at least 8 chars with upper/lowercase, number and special character");
         }
 
         Account account = existing.get();
@@ -113,5 +119,12 @@ public class UserRestController {
         if (request.getActivated() != null) {
             account.setActivated(request.getActivated());
         }
+    }
+
+    private boolean isStrongPassword(String password) {
+        if (password == null) {
+            return false;
+        }
+        return password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
     }
 }

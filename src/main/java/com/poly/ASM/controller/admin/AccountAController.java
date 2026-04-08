@@ -68,6 +68,9 @@ public class AccountAController {
                                                   @RequestParam(value = "activated", required = false) Boolean activated,
                                                   @RequestParam("roleId") String roleId) {
         validatePhoneAndAddress(phone, address);
+        if (!isStrongPassword(password)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Mật khẩu phải có tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt");
+        }
         Account account = new Account();
         account.setUsername(username);
         account.setPassword(passwordEncoder.encode(password));
@@ -123,7 +126,7 @@ public class AccountAController {
         }
         validatePhoneAndAddress(phone, address);
         if (password != null && !password.isBlank()) {
-            account.setPassword(passwordEncoder.encode(password));
+            throw new ApiException(HttpStatus.FORBIDDEN, "Admin không được phép đổi mật khẩu của khách hàng qua API này");
         }
         account.setFullname(fullname);
         account.setEmail(email);
@@ -219,5 +222,12 @@ public class AccountAController {
         if (normalizedAddress.isBlank()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Địa chỉ là bắt buộc");
         }
+    }
+
+    private boolean isStrongPassword(String password) {
+        if (password == null) {
+            return false;
+        }
+        return password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
     }
 }

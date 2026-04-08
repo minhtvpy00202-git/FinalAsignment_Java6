@@ -4,6 +4,7 @@ import com.poly.ASM.entity.user.Account;
 import com.poly.ASM.repository.user.AccountRepository;
 import com.poly.ASM.service.user.AccountService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.Optional;
 public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public List<Account> findAll() {
@@ -37,6 +39,12 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     public Account create(Account account) {
+        if (account != null && account.getPassword() != null && !account.getPassword().isBlank()) {
+            String rawPassword = account.getPassword();
+            if (!(rawPassword.startsWith("$2a$") || rawPassword.startsWith("$2b$") || rawPassword.startsWith("$2y$"))) {
+                account.setPassword(passwordEncoder.encode(rawPassword));
+            }
+        }
         return accountRepository.save(account);
     }
 

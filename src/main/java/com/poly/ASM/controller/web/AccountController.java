@@ -51,6 +51,9 @@ public class AccountController {
         if (accountService.findByEmail(email).isPresent()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Email đã tồn tại", null));
         }
+        if (!isStrongPassword(password)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Mật khẩu phải có tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.", null));
+        }
 
         Account account = new Account();
         account.setUsername(username);
@@ -147,6 +150,9 @@ public class AccountController {
         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Mật khẩu hiện tại không đúng", null));
         }
+        if (!isStrongPassword(newPassword)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Mật khẩu mới phải có tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.", null));
+        }
         user.setPassword(passwordEncoder.encode(newPassword));
         accountService.update(user);
         return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", null));
@@ -159,11 +165,24 @@ public class AccountController {
             return ResponseEntity.badRequest().body(ApiResponse.error("Email không tồn tại", null));
         }
         Account user = account.get();
-        user.setPassword(passwordEncoder.encode("123456"));
+        String newPassword = generateStrongPassword();
+        user.setPassword(passwordEncoder.encode(newPassword));
         accountService.update(user);
         Map<String, Object> data = new HashMap<>();
         data.put("email", email);
-        data.put("newPassword", "123456");
+        data.put("newPassword", newPassword);
         return ResponseEntity.ok(ApiResponse.success("Đặt lại mật khẩu thành công", data));
+    }
+
+    private boolean isStrongPassword(String password) {
+        if (password == null) {
+            return false;
+        }
+        return password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
+    }
+
+    private String generateStrongPassword() {
+        String base = UUID.randomUUID().toString().replace("-", "");
+        return base.substring(0, 8) + "Aa1!";
     }
 }
