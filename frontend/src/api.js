@@ -127,6 +127,10 @@ export const api = {
         listByCategory: (id, params) => request(`/api/store/products/category/${id}${toQuery(params)}`),
         detail: (id) => request(`/api/store/products/${id}`)
     },
+    locations: {
+        provinces: () => request("/api/locations/provinces"),
+        wards: (provinceCode) => request(`/api/locations/wards${toQuery({provinceCode})}`)
+    },
     cart: {
         get: () => request("/api/cart"),
         add: (productId, sizeId) => request(`/api/cart/items/${productId}${toQuery({sizeId})}`, {method: "POST"}),

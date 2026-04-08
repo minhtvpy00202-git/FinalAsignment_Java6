@@ -182,7 +182,7 @@ const clearFilters = async () => {
                 <section class="catalog-content" ref="resultsRef">
                     <div class="catalog-header">
                         <h1 class="page-title">Tất cả sản phẩm</h1>
-                        <p class="product-count">{{ (data.products || []).length }} sản phẩm</p>
+                        <p class="product-count">{{ data.totalElements ?? data.totalProducts ?? (data.products || []).length }} sản phẩm</p>
                     </div>
                     
                     <div v-if="loading" class="status-message">Đang tải dữ liệu...</div>

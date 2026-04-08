@@ -293,4 +293,158 @@ ALTER TABLE dbo.accounts ALTER COLUMN phone VARCHAR(20) NOT NULL;
 ALTER TABLE dbo.accounts ALTER COLUMN address NVARCHAR(255) NOT NULL;
 GO
 
+-- UPDATE ĐƠN VỊ HÀNH CHÍNH 08/04
+IF OBJECT_ID('dbo.administrative_regions', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.administrative_regions (
+        id INT NOT NULL PRIMARY KEY,
+        name NVARCHAR(255) NOT NULL,
+        name_en NVARCHAR(255) NOT NULL,
+        code_name NVARCHAR(255) NULL,
+        code_name_en NVARCHAR(255) NULL
+    );
+END
+GO
 
+IF OBJECT_ID('dbo.administrative_units', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.administrative_units (
+        id INT NOT NULL PRIMARY KEY,
+        full_name NVARCHAR(255) NULL,
+        full_name_en NVARCHAR(255) NULL,
+        short_name NVARCHAR(255) NULL,
+        short_name_en NVARCHAR(255) NULL,
+        code_name NVARCHAR(255) NULL,
+        code_name_en NVARCHAR(255) NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.provinces', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.provinces (
+        code NVARCHAR(20) NOT NULL PRIMARY KEY,
+        name NVARCHAR(255) NOT NULL,
+        name_en NVARCHAR(255) NULL,
+        full_name NVARCHAR(255) NOT NULL,
+        full_name_en NVARCHAR(255) NULL,
+        code_name NVARCHAR(255) NULL,
+        administrative_unit_id INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.wards', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.wards (
+        code NVARCHAR(20) NOT NULL PRIMARY KEY,
+        name NVARCHAR(255) NOT NULL,
+        name_en NVARCHAR(255) NULL,
+        full_name NVARCHAR(255) NULL,
+        full_name_en NVARCHAR(255) NULL,
+        code_name NVARCHAR(255) NULL,
+        province_code NVARCHAR(20) NULL,
+        administrative_unit_id INT NULL
+    );
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'provinces_administrative_unit_id_fkey')
+BEGIN
+    ALTER TABLE dbo.provinces
+    ADD CONSTRAINT provinces_administrative_unit_id_fkey
+        FOREIGN KEY (administrative_unit_id) REFERENCES dbo.administrative_units(id);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'wards_administrative_unit_id_fkey')
+BEGIN
+    ALTER TABLE dbo.wards
+    ADD CONSTRAINT wards_administrative_unit_id_fkey
+        FOREIGN KEY (administrative_unit_id) REFERENCES dbo.administrative_units(id);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'wards_province_code_fkey')
+BEGIN
+    ALTER TABLE dbo.wards
+    ADD CONSTRAINT wards_province_code_fkey
+        FOREIGN KEY (province_code) REFERENCES dbo.provinces(code);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_provinces_unit' AND object_id = OBJECT_ID('dbo.provinces'))
+BEGIN
+    CREATE INDEX idx_provinces_unit ON dbo.provinces(administrative_unit_id);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_wards_province' AND object_id = OBJECT_ID('dbo.wards'))
+BEGIN
+    CREATE INDEX idx_wards_province ON dbo.wards(province_code);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_wards_unit' AND object_id = OBJECT_ID('dbo.wards'))
+BEGIN
+    CREATE INDEX idx_wards_unit ON dbo.wards(administrative_unit_id);
+END
+GO
+
+
+
+IF COL_LENGTH('dbo.orders', 'province_code') IS NULL
+BEGIN
+    ALTER TABLE dbo.orders ADD province_code NVARCHAR(20) NULL;
+END
+GO
+
+IF COL_LENGTH('dbo.orders', 'ward_code') IS NULL
+BEGIN
+    ALTER TABLE dbo.orders ADD ward_code NVARCHAR(20) NULL;
+END
+GO
+
+IF COL_LENGTH('dbo.orders', 'delivery_lat') IS NULL
+BEGIN
+    ALTER TABLE dbo.orders ADD delivery_lat FLOAT NULL;
+END
+GO
+
+IF COL_LENGTH('dbo.orders', 'delivery_lng') IS NULL
+BEGIN
+    ALTER TABLE dbo.orders ADD delivery_lng FLOAT NULL;
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'orders_province_code_fkey')
+BEGIN
+    ALTER TABLE dbo.orders
+    ADD CONSTRAINT orders_province_code_fkey
+        FOREIGN KEY (province_code) REFERENCES dbo.provinces(code);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'orders_ward_code_fkey')
+BEGIN
+    ALTER TABLE dbo.orders
+    ADD CONSTRAINT orders_ward_code_fkey
+        FOREIGN KEY (ward_code) REFERENCES dbo.wards(code);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_orders_province_code' AND object_id = OBJECT_ID('dbo.orders'))
+BEGIN
+    CREATE INDEX idx_orders_province_code ON dbo.orders(province_code);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_orders_ward_code' AND object_id = OBJECT_ID('dbo.orders'))
+BEGIN
+    CREATE INDEX idx_orders_ward_code ON dbo.orders(ward_code);
+END
+GO
+
+-- Import
+:r .\mssql_ImportData_vn_units.sql
+GO

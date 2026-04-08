@@ -2,22 +2,26 @@
 import {onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {CheckoutPage} from "@/legacy/pages";
+import {api} from "@/api";
 
 const {checkout, form, result, error, submit, money} = CheckoutPage.setup();
 const router = useRouter();
-const province = "Gia Lai";
-const wards = [
-    "Phường Quy Nhơn",
-    "Phường Quy Nhơn Đông",
-    "Phường Quy Nhơn Tây",
-    "Phường Quy Nhơn Nam",
-    "Phường Quy Nhơn Bắc",
-    "Xã Nhơn Châu"
-];
-if (!form.address) {
+const provinces = ref([]);
+const wards = ref([]);
+const selectedProvinceCode = ref("");
+const selectedWardCode = ref("");
+if (form.address === undefined || form.address === null) {
     form.address = "";
 }
-const selectedWard = ref("");
+if (form.addressDetail === undefined || form.addressDetail === null) {
+    form.addressDetail = "";
+}
+if (form.provinceCode === undefined || form.provinceCode === null) {
+    form.provinceCode = "";
+}
+if (form.wardCode === undefined || form.wardCode === null) {
+    form.wardCode = "";
+}
 const mapRef = ref(null);
 const geocodeMessage = ref("");
 const placing = ref(false);
@@ -25,9 +29,40 @@ let leafletMap = null;
 let leafletMarker = null;
 let geocodeTimer = null;
 let geocodeAbort = null;
-const onWardChange = (ward) => {
-    selectedWard.value = ward;
-    form.address = `${ward}, ${province}`;
+const selectedProvinceName = () => provinces.value.find((item) => item.code === selectedProvinceCode.value)?.name || "";
+const selectedWardName = () => wards.value.find((item) => item.code === selectedWardCode.value)?.name || "";
+const syncAddress = () => {
+    const parts = [
+        (form.addressDetail || "").trim(),
+        selectedWardName(),
+        selectedProvinceName()
+    ].filter((part) => part && String(part).trim() !== "");
+    form.address = parts.join(", ");
+};
+const loadProvinces = async () => {
+    const res = await api.locations.provinces();
+    provinces.value = res.data || [];
+};
+const loadWards = async (provinceCode) => {
+    if (!provinceCode) {
+        wards.value = [];
+        return;
+    }
+    const res = await api.locations.wards(provinceCode);
+    wards.value = res.data || [];
+};
+const onProvinceChange = async (provinceCode) => {
+    selectedProvinceCode.value = provinceCode;
+    form.provinceCode = provinceCode || "";
+    selectedWardCode.value = "";
+    form.wardCode = "";
+    await loadWards(provinceCode);
+    syncAddress();
+};
+const onWardChange = (wardCode) => {
+    selectedWardCode.value = wardCode;
+    form.wardCode = wardCode || "";
+    syncAddress();
 };
 const ensureLeaflet = async () => {
     if (window.L) {
@@ -100,13 +135,14 @@ const applyGeoResult = (json) => {
     return true;
 };
 const geocodeAddress = async () => {
-    if (!selectedWard.value) {
+    if (!selectedWardCode.value) {
         return;
     }
+    const wardName = selectedWardName();
+    const provinceName = selectedProvinceName();
     const queryList = [
-        `${selectedWard.value}, ${province}, Việt Nam`,
-        `${selectedWard.value}, Bình Định, Việt Nam`,
-        `${selectedWard.value}, Việt Nam`
+        `${wardName}, ${provinceName}, Việt Nam`,
+        `${wardName}, Việt Nam`
     ];
     if (geocodeAbort) {
         geocodeAbort.abort();
@@ -141,7 +177,10 @@ const geocodeAddress = async () => {
         geocodeMessage.value = "Không thể định vị địa chỉ lúc này.";
     }
 };
-watch(selectedWard, () => {
+watch(() => form.addressDetail, () => {
+    syncAddress();
+});
+watch(selectedWardCode, () => {
     if (geocodeTimer) {
         clearTimeout(geocodeTimer);
     }
@@ -153,7 +192,7 @@ onMounted(async () => {
         if (!mapRef.value) {
             return;
         }
-        leafletMap = L.map(mapRef.value).setView([10.7769, 106.7009], 13);
+        leafletMap = L.map(mapRef.value).setView([14.0583, 108.2772], 6);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 19
         }).addTo(leafletMap);
@@ -171,8 +210,30 @@ onMounted(async () => {
     } catch (e) {
         geocodeMessage.value = "Không tải được bản đồ Leaflet.";
     }
+    try {
+        await loadProvinces();
+        if (form.provinceCode) {
+            selectedProvinceCode.value = form.provinceCode;
+            await loadWards(form.provinceCode);
+        } else if (provinces.value.length) {
+            selectedProvinceCode.value = provinces.value[0].code;
+            form.provinceCode = selectedProvinceCode.value;
+            await loadWards(selectedProvinceCode.value);
+        }
+        if (form.wardCode) {
+            selectedWardCode.value = form.wardCode;
+        }
+        syncAddress();
+    } catch (e) {
+        geocodeMessage.value = "Không tải được danh mục địa chỉ hành chính.";
+    }
 });
 const submitCheckout = async () => {
+    if (!form.provinceCode || !form.wardCode) {
+        geocodeMessage.value = "Vui lòng chọn đầy đủ tỉnh/thành và phường/xã.";
+        return;
+    }
+    syncAddress();
     placing.value = true;
     await submit();
     placing.value = false;
@@ -227,17 +288,23 @@ const submitCheckout = async () => {
                         
                         <div class="form-group">
                             <label>Tỉnh / Thành phố</label>
-                            <select :value="province" disabled class="form-control">
-                                <option>{{ province }}</option>
+                            <select class="form-control" v-model="selectedProvinceCode" @change="onProvinceChange($event.target.value)" required>
+                                <option value="">Chọn tỉnh/thành</option>
+                                <option v-for="province in provinces" :key="province.code" :value="province.code">{{ province.name }}</option>
                             </select>
                         </div>
                         
                         <div class="form-group">
                             <label>Phường / Xã</label>
-                            <select @change="onWardChange($event.target.value)" required class="form-control">
+                            <select v-model="selectedWardCode" @change="onWardChange($event.target.value)" required class="form-control">
                                 <option value="">Chọn phường/xã</option>
-                                <option v-for="ward in wards" :key="ward" :value="ward">{{ ward }}</option>
+                                <option v-for="ward in wards" :key="ward.code" :value="ward.code">{{ ward.name }}</option>
                             </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Số nhà, tên đường</label>
+                            <input v-model="form.addressDetail" class="form-control" placeholder="Ví dụ: 123 Lê Lợi" required>
                         </div>
                         
                         <div class="checkout-map" ref="mapRef"></div>

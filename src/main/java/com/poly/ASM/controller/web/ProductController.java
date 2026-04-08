@@ -125,6 +125,8 @@ public class ProductController {
         data.put("currentPage", pageResult.getNumber());
         data.put("totalPages", pageResult.getTotalPages());
         data.put("pageSize", size);
+        data.put("totalElements", pageResult.getTotalElements());
+        data.put("totalProducts", pageResult.getTotalElements());
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", data));
     }
 

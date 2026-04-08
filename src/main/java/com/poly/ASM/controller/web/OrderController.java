@@ -74,7 +74,10 @@ public class OrderController {
 
     @PostMapping("/checkout")
     @Transactional
-    public ResponseEntity<ApiResponse<?>> checkout(@RequestParam("address") String address,
+    public ResponseEntity<ApiResponse<?>> checkout(@RequestParam(value = "address", required = false) String address,
+                                                   @RequestParam(value = "addressDetail", required = false) String addressDetail,
+                                                   @RequestParam(value = "provinceCode", required = false) String provinceCode,
+                                                   @RequestParam(value = "wardCode", required = false) String wardCode,
                                                    @RequestParam(value = "lat", required = false) Double lat,
                                                    @RequestParam(value = "lng", required = false) Double lng,
                                                    @RequestParam("paymentMethod") String paymentMethod) {
@@ -102,11 +105,29 @@ public class OrderController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
         }
+        ensureOrderAddressColumns();
+        String normalizedProvinceCode = provinceCode == null ? null : provinceCode.trim();
+        String normalizedWardCode = wardCode == null ? null : wardCode.trim();
+        if ((normalizedProvinceCode != null && !normalizedProvinceCode.isBlank())
+                || (normalizedWardCode != null && !normalizedWardCode.isBlank())) {
+            if (normalizedProvinceCode == null || normalizedProvinceCode.isBlank()
+                    || normalizedWardCode == null || normalizedWardCode.isBlank()) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng chọn đầy đủ tỉnh/thành và phường/xã.", null));
+            }
+            if (findProvinceName(normalizedProvinceCode).isEmpty() || findWardName(normalizedWardCode, normalizedProvinceCode).isEmpty()) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Địa chỉ hành chính không hợp lệ.", null));
+            }
+        }
+        String resolvedAddress = buildOrderAddress(address, addressDetail, normalizedProvinceCode, normalizedWardCode);
+        if (resolvedAddress == null || resolvedAddress.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập địa chỉ nhận hàng hợp lệ.", null));
+        }
         Order order = new Order();
         order.setAccount(user);
-        order.setAddress(address);
+        order.setAddress(resolvedAddress);
         order.setStatus("BANK".equalsIgnoreCase(paymentMethod) ? "PENDING_PAYMENT" : "PLACED_UNPAID");
         Order savedOrder = orderService.create(order);
+        updateOrderAdministrative(savedOrder.getId(), normalizedProvinceCode, normalizedWardCode);
         updateOrderCoordinates(savedOrder.getId(), lat, lng);
         notificationService.notifyOrderPlacedForUser(user, savedOrder);
         notificationService.notifyOrderPlacedForAdmins(savedOrder);
@@ -352,9 +373,13 @@ public class OrderController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
         }
         Order order = orderOpt.get();
+        List<OrderDetail> details = orderDetailService.findByOrderId(id);
+        BigDecimal totalAmount = calculateOrderTotal(details);
         Map<String, Object> data = new HashMap<>();
         data.put("order", toOrderData(order));
-        data.put("details", toOrderDetailData(orderDetailService.findByOrderId(id)));
+        data.put("details", toOrderDetailData(details));
+        data.put("totalAmount", totalAmount);
+        data.put("totalPrice", totalAmount);
         data.put("reviewable", isDeliveredStatus(order.getStatus()));
         data.put("reviewedProductIds", productReviewService.findReviewedProductIds(user.getUsername(), id));
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết đơn hàng thành công", data));
@@ -501,6 +526,87 @@ public class OrderController {
                     }
                 }
             }
+        }
+    }
+
+    private String buildOrderAddress(String address, String addressDetail, String provinceCode, String wardCode) {
+        String baseAddress = firstNonBlank(addressDetail, address);
+        if (provinceCode == null || provinceCode.isBlank() || wardCode == null || wardCode.isBlank()) {
+            return baseAddress;
+        }
+        Optional<String> province = findProvinceName(provinceCode);
+        Optional<String> ward = findWardName(wardCode, provinceCode);
+        if (province.isEmpty() || ward.isEmpty()) {
+            return baseAddress;
+        }
+        if (baseAddress == null || baseAddress.isBlank()) {
+            return ward.get() + ", " + province.get();
+        }
+        return baseAddress + ", " + ward.get() + ", " + province.get();
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first.trim();
+        }
+        if (second != null && !second.isBlank()) {
+            return second.trim();
+        }
+        return null;
+    }
+
+    private Optional<String> findProvinceName(String provinceCode) {
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select full_name from dbo.provinces where code = ?",
+                    String.class,
+                    provinceCode
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> findWardName(String wardCode, String provinceCode) {
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select full_name from dbo.wards where code = ? and province_code = ?",
+                    String.class,
+                    wardCode,
+                    provinceCode
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private void updateOrderAdministrative(Long orderId, String provinceCode, String wardCode) {
+        if (orderId == null) {
+            return;
+        }
+        ensureOrderAddressColumns();
+        try {
+            jdbcTemplate.update("update dbo.orders set province_code = ?, ward_code = ? where id = ?",
+                    provinceCode, wardCode, orderId);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void ensureOrderAddressColumns() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'province_code') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD province_code NVARCHAR(20) NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'ward_code') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD ward_code NVARCHAR(20) NULL;
+                END
+            """);
+        } catch (Exception ignored) {
         }
     }
 

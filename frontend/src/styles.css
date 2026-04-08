@@ -2320,6 +2320,154 @@ textarea:focus {
     padding: 48px;
 }
 
+.review-google-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 28px;
+    align-items: center;
+}
+
+.review-google-overview {
+    text-align: center;
+}
+
+.review-google-score {
+    font-size: 64px;
+    line-height: 1;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.review-google-stars {
+    margin-top: 8px;
+    color: #d0d4db;
+    font-size: 26px;
+    letter-spacing: 2px;
+}
+
+.review-google-stars .active {
+    color: #f4b400;
+}
+
+.review-google-count {
+    margin-top: 10px;
+    color: #6b7280;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.review-google-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.review-google-bar-row {
+    display: grid;
+    grid-template-columns: 56px 1fr 34px;
+    align-items: center;
+    gap: 12px;
+}
+
+.review-google-bar-label {
+    color: #374151;
+    font-weight: 600;
+}
+
+.review-google-bar-track {
+    height: 12px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.review-google-bar-fill {
+    height: 100%;
+    background: #f4b400;
+    border-radius: 999px;
+}
+
+.review-google-bar-value {
+    text-align: right;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.review-google-list {
+    margin-top: 32px;
+    border-top: 1px solid #edf0f2;
+    padding-top: 24px;
+}
+
+.review-google-item {
+    padding: 18px 0;
+    border-bottom: 1px solid #edf0f2;
+}
+
+.review-google-item:last-child {
+    border-bottom: none;
+}
+
+.review-google-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.review-google-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #e5e7eb;
+    flex: 0 0 44px;
+}
+
+.review-google-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #111827;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.review-google-user-meta strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.review-google-item-stars {
+    color: #d0d4db;
+    font-size: 14px;
+}
+
+.review-google-item-stars .active {
+    color: #f4b400;
+}
+
+.review-google-content {
+    margin: 10px 0 0;
+    color: #374151;
+    line-height: 1.7;
+}
+
+.review-google-images {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.review-google-images img {
+    width: 90px;
+    height: 90px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid #e5e7eb;
+}
+
 @media (max-width: 991px) {
     .product-detail-content {
         grid-template-columns: 1fr;
@@ -2328,6 +2476,15 @@ textarea:focus {
     
     .detail-product-name {
         font-size: 2rem;
+    }
+
+    .review-google-layout {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .review-google-overview {
+        text-align: left;
     }
 }
 

@@ -89,6 +89,62 @@ const checkoutNow = async () => {
         actionMessage.value = e.message;
     }
 };
+const reviews = computed(() => Array.isArray(data.value?.reviews) ? data.value.reviews : []);
+const reviewCount = computed(() => reviews.value.length);
+const avgRating = computed(() => {
+    const raw = Number(data.value?.avgRatingValue ?? 0);
+    return Number.isFinite(raw) ? raw : 0;
+});
+const roundedAvg = computed(() => Math.round(avgRating.value * 10) / 10);
+const starBuckets = computed(() => {
+    const result = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+    for (const review of reviews.value) {
+        const star = Number(review?.starRating || 0);
+        if (star >= 1 && star <= 5) {
+            result[star] += 1;
+        }
+    }
+    return result;
+});
+const starRows = computed(() => {
+    const total = reviewCount.value || 1;
+    return [5, 4, 3, 2, 1].map((star) => {
+        const count = starBuckets.value[star] || 0;
+        return {
+            star,
+            count,
+            percent: Math.round((count * 10000) / total) / 100
+        };
+    });
+});
+const starFillWidth = (percent) => `${Math.max(0, Math.min(100, Number(percent || 0)))}%`;
+const resolveImagePath = (name) => {
+    if (!name) {
+        return "";
+    }
+    const normalized = String(name).trim();
+    if (!normalized) {
+        return "";
+    }
+    if (normalized.startsWith("http://") || normalized.startsWith("https://") || normalized.startsWith("/")) {
+        return normalized;
+    }
+    return `/images/${normalized}`;
+};
+const avatarText = (review) => {
+    const label = review?.account?.fullname || review?.account?.username || "K";
+    return String(label).trim().charAt(0).toUpperCase();
+};
+const reviewImages = (review) => {
+    const raw = review?.images || "";
+    if (!raw || typeof raw !== "string") {
+        return [];
+    }
+    return raw
+        .split(",")
+        .map((item) => resolveImagePath(item))
+        .filter((item) => !!item);
+};
 </script>
 
 <template>
@@ -155,21 +211,40 @@ const checkoutNow = async () => {
             <section class="product-reviews" v-if="data">
                 <h2 class="section-title">Đánh giá sản phẩm</h2>
                 <div class="review-card">
-                    <div class="review-summary">
-                        <div class="review-score-number">
-                            <strong>{{ data.avgRatingValue || 0 }}</strong>
-                            <span>/ 5</span>
+                    <div class="review-google-layout">
+                        <div class="review-google-overview">
+                            <div class="review-google-score">{{ roundedAvg }}</div>
+                            <div class="review-google-stars">
+                                <span v-for="s in 5" :key="'avg-star-' + s" :class="s <= Math.round(avgRating) ? 'active' : ''">★</span>
+                            </div>
+                            <div class="review-google-count">{{ reviewCount }} bài đánh giá</div>
+                        </div>
+                        <div class="review-google-bars">
+                            <div class="review-google-bar-row" v-for="row in starRows" :key="'bar-' + row.star">
+                                <div class="review-google-bar-label">{{ row.star }} sao</div>
+                                <div class="review-google-bar-track">
+                                    <div class="review-google-bar-fill" :style="{width: starFillWidth(row.percent)}"></div>
+                                </div>
+                                <div class="review-google-bar-value">{{ row.count }}</div>
+                            </div>
                         </div>
                     </div>
-                    <div v-if="(data.reviews || []).length" class="mt-4">
-                        <div v-for="review in data.reviews" :key="review.id" class="review-display">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong>{{ review.account?.fullname || review.account?.username || "Khách hàng" }}</strong>
-                                <span class="stars">
-                                    <span v-for="s in 5" :key="s" :class="s <= (review.starRating || 0) ? 'text-warning' : 'text-muted'">★</span>
-                                </span>
+                    <div v-if="reviews.length" class="review-google-list">
+                        <div v-for="review in reviews" :key="review.id" class="review-google-item">
+                            <div class="review-google-user">
+                                <img v-if="resolveImagePath(review.account?.photo)" class="review-google-avatar" :src="resolveImagePath(review.account?.photo)" alt="avatar">
+                                <div v-else class="review-google-avatar review-google-avatar-fallback">{{ avatarText(review) }}</div>
+                                <div class="review-google-user-meta">
+                                    <strong>{{ review.account?.fullname || review.account?.username || "Khách hàng" }}</strong>
+                                    <div class="review-google-item-stars">
+                                        <span v-for="s in 5" :key="'item-star-' + review.id + '-' + s" :class="s <= (review.starRating || 0) ? 'active' : ''">★</span>
+                                    </div>
+                                </div>
                             </div>
-                            <p class="mb-0">{{ review.reviewContent || review.review_content || "Không có nội dung đánh giá." }}</p>
+                            <p class="review-google-content">{{ review.reviewContent || review.review_content || "Không có nội dung đánh giá." }}</p>
+                            <div v-if="reviewImages(review).length" class="review-google-images">
+                                <img v-for="(image, index) in reviewImages(review)" :key="'review-image-' + review.id + '-' + index" :src="image" alt="review image">
+                            </div>
                         </div>
                     </div>
                     <div v-else class="text-muted mt-3">Chưa có đánh giá nào cho sản phẩm này.</div>

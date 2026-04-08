@@ -23,6 +23,7 @@ let marker = null;
 let destMarker = null;
 let routeLine = null;
 let simulateTimer = null;
+const routingWarning = ref("");
 const statusLabel = (value) => {
     const labels = {
         PENDING_PAYMENT: "Đang chờ thanh toán",
@@ -163,6 +164,37 @@ const ensureLeaflet = async () => {
     });
     return window.L;
 };
+const createTruckIcon = (L) => L.divIcon({
+    className: "delivery-truck-icon",
+    html: "<div style=\"font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));\">🚚</div>",
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+});
+const fetchRoadRoute = async (start, dest) => {
+    const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson`;
+    const res = await fetch(url, {method: "GET"});
+    if (!res.ok) {
+        throw new Error("routing-failed");
+    }
+    const payload = await res.json();
+    const coordinates = payload?.routes?.[0]?.geometry?.coordinates;
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        throw new Error("routing-empty");
+    }
+    return coordinates
+        .map((point) => [Number(point[1]), Number(point[0])])
+        .filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+};
+const getRoutePoints = () => {
+    const points = routeLine?.getLatLngs?.();
+    if (!Array.isArray(points)) {
+        return [];
+    }
+    if (points.length && Array.isArray(points[0])) {
+        return points[0];
+    }
+    return points;
+};
 const initMap = async () => {
     if (!selected.value || !mapRef.value) {
         return;
@@ -176,6 +208,7 @@ const initMap = async () => {
     const validLng = Number.isFinite(lng) && Math.abs(lng) <= 180;
     hasValidDestination.value = validLat && validLng;
     mapInfo.value = hasValidDestination.value ? "" : "Đơn hàng này chưa có toạ độ giao hàng hợp lệ.";
+    routingWarning.value = "";
     const dest = hasValidDestination.value ? [lat, lng] : store;
     if (map && map.getContainer && map.getContainer() !== mapRef.value) {
         destroyMap();
@@ -195,8 +228,21 @@ const initMap = async () => {
     if (destMarker) {
         map.removeLayer(destMarker);
     }
-    routeLine = hasValidDestination.value ? L.polyline([store, dest], {color: "#2563eb", weight: 4}).addTo(map) : null;
-    marker = L.marker(store).addTo(map).bindPopup("Cửa hàng");
+    if (hasValidDestination.value) {
+        let routePoints = [store, dest];
+        try {
+            const roadPoints = await fetchRoadRoute(store, dest);
+            if (roadPoints.length >= 2) {
+                routePoints = roadPoints;
+            }
+        } catch (e) {
+            routingWarning.value = "Không tải được lộ trình thực, tạm hiển thị đường thẳng.";
+        }
+        routeLine = L.polyline(routePoints, {color: "#2563eb", weight: 4}).addTo(map);
+    } else {
+        routeLine = null;
+    }
+    marker = L.marker(store, {icon: createTruckIcon(L)}).addTo(map).bindPopup("Xe giao hàng");
     destMarker = L.marker(dest).addTo(map).bindPopup(hasValidDestination.value ? "Điểm giao" : "Chưa có toạ độ giao hàng");
     if (routeLine) {
         map.fitBounds(routeLine.getBounds(), {padding: [20, 20]});
@@ -239,16 +285,22 @@ const startDeliverySimulation = async () => {
     } finally {
         updatingStatus.value = false;
     }
-    const points = routeLine ? routeLine.getLatLngs() : null;
+    const points = getRoutePoints();
     const totalSteps = 50;
     let step = 0;
     clearSimulation();
     simulatingDelivery.value = true;
     simulateTimer = setInterval(async () => {
         step += 1;
-        if (points && points.length >= 2 && marker) {
-            const latNow = points[0].lat + (points[1].lat - points[0].lat) * (step / totalSteps);
-            const lngNow = points[0].lng + (points[1].lng - points[0].lng) * (step / totalSteps);
+        if (points.length >= 2 && marker) {
+            const progress = step / totalSteps;
+            const segmentProgress = progress * (points.length - 1);
+            const segmentIndex = Math.min(points.length - 2, Math.floor(segmentProgress));
+            const local = segmentProgress - segmentIndex;
+            const from = points[segmentIndex];
+            const to = points[segmentIndex + 1];
+            const latNow = from.lat + (to.lat - from.lat) * local;
+            const lngNow = from.lng + (to.lng - from.lng) * local;
             marker.setLatLng([latNow, lngNow]);
         }
         if (step >= totalSteps) {
@@ -399,6 +451,7 @@ onMounted(async () => {
                 <div class="card" style="margin-top:12px;">
                     <h4>Bản đồ giao hàng</h4>
                     <div class="status-message status-error" v-if="mapInfo">{{ mapInfo }}</div>
+                    <div class="status-message" v-if="routingWarning">{{ routingWarning }}</div>
                     <div ref="mapRef" style="height:360px;"></div>
                 </div>
             </div>

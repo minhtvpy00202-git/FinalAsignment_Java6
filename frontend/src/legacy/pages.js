@@ -334,7 +334,15 @@ const CartPage = {
 const CheckoutPage = {
     setup() {
         const checkout = ref({items: [], totalPrice: 0});
-        const form = reactive({address: "", lat: "", lng: "", paymentMethod: "BANK"});
+        const form = reactive({
+            address: "",
+            addressDetail: "",
+            provinceCode: "",
+            wardCode: "",
+            lat: "",
+            lng: "",
+            paymentMethod: "BANK"
+        });
         const result = ref(null);
         const error = ref("");
         const load = async () => {
