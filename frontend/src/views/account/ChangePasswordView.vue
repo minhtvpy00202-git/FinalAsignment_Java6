@@ -19,7 +19,7 @@ const submitForm = async () => {
         <div class="change-password-shell">
             <div class="change-password-side">
                 <h3 class="page-title">Đổi Mật Khẩu</h3>
-                <p class="change-password-note">Mật khẩu mới tối thiểu 8 ký tự và bao gồm chữ, số để tăng bảo mật.</p>
+                <p class="change-password-note">Mật khẩu mới tối thiểu 8 ký tự và bao gồm CHỮ HOA, chữ THƯỜNG, SỐ và KÝ TỰ ĐẶC BIỆT.</p>
             </div>
             <div class="change-password-card">
                 <div v-if="message" class="status-message" :class="message.includes('thành công') ? 'status-success' : 'status-error'">{{ message }}</div>
