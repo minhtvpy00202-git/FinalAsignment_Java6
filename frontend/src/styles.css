@@ -410,6 +410,9 @@ textarea:focus {
     position: sticky;
     top: 100px;
     align-self: start;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .filters-vertical {
@@ -1784,6 +1787,9 @@ textarea:focus {
     
     .filters-sidebar {
         position: static;
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
     }
     
     .product-grid {

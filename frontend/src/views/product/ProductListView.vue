@@ -67,29 +67,27 @@ watch(filter, (newFilter) => {
     router.replace({ query }).catch(() => {});
 }, { deep: true });
 
-const applySliderToFilter = () => {
-    filter.minPrice = Math.min(sliderMin.value, sliderMax.value);
-    filter.maxPrice = Math.max(sliderMin.value, sliderMax.value);
-};
 const onSliderMinInput = () => {
     if (sliderMin.value > sliderMax.value) {
         sliderMax.value = sliderMin.value;
     }
     selectedPriceRange.value = "all";
-    applySliderToFilter();
 };
 const onSliderMaxInput = () => {
     if (sliderMax.value < sliderMin.value) {
         sliderMin.value = sliderMax.value;
     }
     selectedPriceRange.value = "all";
-    applySliderToFilter();
 };
 const scrollToResults = async () => {
     await nextTick();
     resultsRef.value?.scrollIntoView({behavior: "smooth", block: "start"});
 };
 const applySearchFilters = async () => {
+    if (selectedPriceRange.value === "all") {
+        filter.minPrice = Math.min(sliderMin.value, sliderMax.value);
+        filter.maxPrice = Math.max(sliderMin.value, sliderMax.value);
+    }
     filter.page = 0;
     await load();
     await scrollToResults();
@@ -137,7 +135,7 @@ const clearFilters = async () => {
                         <div class="filter-group">
                             <h4 class="filter-title">Danh mục</h4>
                             <div class="form-group">
-                                <select v-model="filter.categoryId" class="form-control" @change="applySelectFilters">
+                                <select v-model="filter.categoryId" class="form-control">
                                     <option value="">Tất cả danh mục</option>
                                     <option v-for="c in (data.categories || [])" :key="c.id" :value="c.id">{{ c.name }}</option>
                                 </select>
@@ -146,7 +144,7 @@ const clearFilters = async () => {
                         <div class="filter-group">
                             <h4 class="filter-title">Sắp xếp</h4>
                             <div class="form-group">
-                                <select v-model="filter.sort" class="form-control" @change="applySelectFilters">
+                                <select v-model="filter.sort" class="form-control">
                                     <option value="">Mặc định</option>
                                     <option value="price_asc">Giá tăng dần</option>
                                     <option value="price_desc">Giá giảm dần</option>
