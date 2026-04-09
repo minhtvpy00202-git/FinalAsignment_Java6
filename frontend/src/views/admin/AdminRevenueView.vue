@@ -8,6 +8,7 @@ const route = useRoute();
 const revenueTableRef = ref(null);
 const rows = ref([]);
 const loading = ref(false);
+const exporting = ref(false);
 const error = ref("");
 const now = new Date();
 const currentYear = now.getFullYear();
@@ -183,6 +184,43 @@ const load = async () => {
 const applyFilters = async () => {
     await load();
     await scrollToRevenueTable();
+};
+const exportExcel = async () => {
+    exporting.value = true;
+    try {
+        const params = new URLSearchParams();
+        if (activeRange.value.fromDate) params.append("fromDate", activeRange.value.fromDate);
+        if (activeRange.value.toDate) params.append("toDate", activeRange.value.toDate);
+        params.append("sortField", isSummaryMode.value ? summaryParams.sortField : periodParams.sortField);
+        params.append("sortDir", isSummaryMode.value ? summaryParams.sortDir : periodParams.sortDir);
+        params.append("mode", viewMode.value);
+        const response = await fetch(`/api/admin/reports/revenue/export?${params.toString()}`, {
+            method: "GET",
+            credentials: "include"
+        });
+        if (!response.ok) {
+            let message = "Không thể xuất file Excel";
+            try {
+                const payload = await response.json();
+                message = payload?.message || message;
+            } catch (e) {
+            }
+            throw new Error(message);
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `doanh-thu-${viewMode.value}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        error.value = e.message || "Không thể xuất file Excel";
+    } finally {
+        exporting.value = false;
+    }
 };
 const clearSummaryFilters = async () => {
     summaryParams.fromDate = "";
@@ -361,6 +399,7 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
                 <div class="table-actions">
                     <button class="btn btn-primary" type="submit" :disabled="loading">Lọc</button>
                     <button class="btn btn-outline-primary" type="button" @click="clearSummaryFilters" :disabled="loading">Xoá lọc</button>
+                    <button class="btn btn-action-outline" type="button" @click="exportExcel" :disabled="exporting || loading">{{ exporting ? "Đang xuất..." : "Xuất Excel" }}</button>
                 </div>
             </form>
             <form class="card revenue-filter" @submit.prevent="applyFilters" v-else>
@@ -408,6 +447,7 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
                 </div>
                 <div class="table-actions">
                     <button class="btn btn-primary" type="submit" :disabled="loading">Lọc dữ liệu</button>
+                    <button class="btn btn-action-outline" type="button" @click="exportExcel" :disabled="exporting || loading">{{ exporting ? "Đang xuất..." : "Xuất Excel" }}</button>
                 </div>
             </form>
             <div v-if="error" class="status-message status-error">{{ error }}</div>
