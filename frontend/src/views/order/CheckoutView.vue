@@ -8,6 +8,8 @@ const {checkout, form, result, error, submit, money} = CheckoutPage.setup();
 const router = useRouter();
 const GOONG_API_KEY = import.meta.env.VITE_GOONG_API_KEY || "";
 const GOONG_MAP_KEY = import.meta.env.VITE_GOONG_MAP_KEY || GOONG_API_KEY;
+const SHOP_LAT = 13.782967;
+const SHOP_LNG = 109.219663;
 const isDevMode = import.meta.env.DEV;
 const goongEnabled = !!GOONG_API_KEY && !!GOONG_MAP_KEY;
 const provinces = ref([]);
@@ -29,8 +31,18 @@ if (form.wardCode === undefined || form.wardCode === null) {
 if (form.shippingPhone === undefined || form.shippingPhone === null) {
     form.shippingPhone = "";
 }
+if (form.deliveryDistanceMeters === undefined || form.deliveryDistanceMeters === null) {
+    form.deliveryDistanceMeters = "";
+}
+if (form.expectedDeliveryDate === undefined || form.expectedDeliveryDate === null) {
+    form.expectedDeliveryDate = "";
+}
+if (form.expectedDeliveryLabel === undefined || form.expectedDeliveryLabel === null) {
+    form.expectedDeliveryLabel = "";
+}
 const mapRef = ref(null);
 const geocodeMessage = ref("");
+const estimatedDeliveryText = ref("");
 const placing = ref(false);
 const addressSuggestions = ref([]);
 let goong = null;
@@ -824,6 +836,21 @@ const submitCheckout = async () => {
         geocodeMessage.value = "Vui lòng chọn đầy đủ tỉnh/thành và phường/xã.";
         return;
     }
+    const destinationLat = Number(form.lat);
+    const destinationLng = Number(form.lng);
+    if (!Number.isFinite(destinationLat) || !Number.isFinite(destinationLng)) {
+        geocodeMessage.value = "Vui lòng chọn vị trí nhận hàng trên bản đồ để tính thời gian giao dự kiến.";
+        return;
+    }
+    const estimate = await calculateDeliveryEstimate(destinationLat, destinationLng);
+    if (!estimate) {
+        geocodeMessage.value = "Không tính được quãng đường giao hàng từ Goong. Vui lòng thử lại.";
+        return;
+    }
+    form.deliveryDistanceMeters = String(estimate.distanceMeters);
+    form.expectedDeliveryDate = estimate.dateIso;
+    form.expectedDeliveryLabel = estimate.label;
+    estimatedDeliveryText.value = estimate.label;
     syncAddress();
     placing.value = true;
     await submit();
@@ -838,6 +865,71 @@ const submitCheckout = async () => {
         return;
     }
     await router.push(`/order/order-detail?id=${orderId}`);
+};
+const toDateIso = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+const toDateLabel = (date) => {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+};
+const buildDeliveryEstimateByDistance = (distanceMeters) => {
+    const km = Number(distanceMeters || 0) / 1000;
+    const now = new Date();
+    let daysToAdd = 0;
+    if (km < 20) {
+        daysToAdd = 0;
+    } else if (km <= 300) {
+        daysToAdd = 2;
+    } else {
+        daysToAdd = 3;
+    }
+    const expectedDate = new Date(now);
+    expectedDate.setDate(now.getDate() + daysToAdd);
+    const dateIso = toDateIso(expectedDate);
+    const dateLabel = toDateLabel(expectedDate);
+    const label = daysToAdd === 0
+        ? `Trong ngày (${dateLabel})`
+        : `${daysToAdd} ngày (${dateLabel})`;
+    return {
+        distanceMeters: Math.round(distanceMeters),
+        daysToAdd,
+        dateIso,
+        label
+    };
+};
+const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
+    if (!GOONG_API_KEY) {
+        return null;
+    }
+    const origin = `${SHOP_LAT},${SHOP_LNG}`;
+    const destination = `${destinationLat},${destinationLng}`;
+    const url = `https://rsapi.goong.io/v2/direction?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&vehicle=car&api_key=${encodeURIComponent(GOONG_API_KEY)}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            return null;
+        }
+        const payload = await response.json();
+        const routes = Array.isArray(payload?.routes) ? payload.routes : [];
+        const firstRoute = routes[0];
+        if (!firstRoute) {
+            return null;
+        }
+        const legs = Array.isArray(firstRoute.legs) ? firstRoute.legs : [];
+        const totalDistance = legs.reduce((sum, leg) => sum + Number(leg?.distance?.value || 0), 0);
+        if (!Number.isFinite(totalDistance) || totalDistance <= 0) {
+            return null;
+        }
+        return buildDeliveryEstimateByDistance(totalDistance);
+    } catch (e) {
+        return null;
+    }
 };
 </script>
 
@@ -963,6 +1055,10 @@ const submitCheckout = async () => {
                         <div class="order-summary-row">
                             <span>Phí vận chuyển:</span>
                             <strong>Miễn phí</strong>
+                        </div>
+                        <div class="order-summary-row">
+                            <span>Dự kiến nhận hàng:</span>
+                            <strong>{{ estimatedDeliveryText || "Sẽ tính khi bấm Đặt hàng ngay" }}</strong>
                         </div>
                         <div class="order-summary-divider"></div>
                         <div class="order-summary-total">

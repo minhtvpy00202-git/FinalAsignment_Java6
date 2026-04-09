@@ -23,6 +23,21 @@ const itemMaxStock = (item) => {
     const stock = Number(item?.stock || 0);
     return Number.isFinite(stock) && stock > 0 ? Math.floor(stock) : 1;
 };
+const itemMinQty = () => 1;
+const canDecrease = (item) => Number(item?.quantity || 1) > itemMinQty();
+const canIncrease = (item) => Number(item?.quantity || 0) < itemMaxStock(item);
+const minusTooltip = (item) => {
+    if (!canDecrease(item)) {
+        return "Số lượng tối thiểu là 1";
+    }
+    return "";
+};
+const plusTooltip = (item) => {
+    if (!canIncrease(item)) {
+        return "Đã đạt tồn kho tối đa";
+    }
+    return "";
+};
 const normalizeQty = (item, value) => {
     const max = itemMaxStock(item);
     const parsed = Number.parseInt(String(value || "").replace(/\D+/g, ""), 10);
@@ -77,7 +92,7 @@ const minus = async (item) => {
     const key = itemKey(item);
     if (updating.value[key]) return;
     
-    if ((item.quantity || 1) > 1) {
+    if (canDecrease(item)) {
         item.quantity = normalizeQty(item, Number(item.quantity || 1) - 1);
         await applyQuantity(item);
     }
@@ -139,7 +154,13 @@ const plus = async (item) => {
                                 <td>-{{ money(lineDiscount(item)) }} VNĐ</td>
                                 <td>
                                     <div class="cart-item-qty-form">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="minus(item)" :disabled="updating[item.productId + '-' + item.sizeId]">-</button>
+                                        <button
+                                            class="btn btn-outline-secondary btn-sm"
+                                            type="button"
+                                            @click="minus(item)"
+                                            :title="minusTooltip(item)"
+                                            :disabled="updating[item.productId + '-' + item.sizeId] || !canDecrease(item)"
+                                        >-</button>
                                         <input
                                             type="text"
                                             inputmode="numeric"
@@ -151,7 +172,13 @@ const plus = async (item) => {
                                             @blur="applyQuantity(item)"
                                             @keyup.enter="applyQuantity(item)"
                                         >
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="plus(item)" :disabled="updating[item.productId + '-' + item.sizeId]">+</button>
+                                        <button
+                                            class="btn btn-outline-secondary btn-sm"
+                                            type="button"
+                                            @click="plus(item)"
+                                            :title="plusTooltip(item)"
+                                            :disabled="updating[item.productId + '-' + item.sizeId] || !canIncrease(item)"
+                                        >+</button>
                                     </div>
                                 </td>
                                 <td>{{ item.sizeName }}</td>

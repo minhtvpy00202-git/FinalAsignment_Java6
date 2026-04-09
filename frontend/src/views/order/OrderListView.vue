@@ -28,6 +28,34 @@ const statusLabel = (status) => {
 };
 const canOnlyDetail = (status) => status === "PLACED_UNPAID" || status === "PLACED_PAID";
 const isPendingPayment = (status) => status === "PENDING_PAYMENT";
+const formatExpectedDelivery = (order) => {
+    const date = String(order?.expectedDeliveryDate || "").trim();
+    const distanceM = Number(order?.deliveryDistanceM || 0);
+    if (!date) {
+        return "Chưa có";
+    }
+    const [year, month, day] = date.split("-");
+    const dateLabel = year && month && day ? `${day}/${month}/${year}` : date;
+    const km = distanceM > 0 ? `${(distanceM / 1000).toFixed(distanceM >= 10000 ? 0 : 1)} km` : "";
+    return km ? `${dateLabel} • ${km}` : dateLabel;
+};
+const formatDeliveredTime = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) {
+        return "Chưa có";
+    }
+    const dt = new Date(raw.replace(" ", "T"));
+    if (Number.isNaN(dt.getTime())) {
+        return raw;
+    }
+    const day = String(dt.getDate()).padStart(2, "0");
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    const year = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2, "0");
+    const mm = String(dt.getMinutes()).padStart(2, "0");
+    const ss = String(dt.getSeconds()).padStart(2, "0");
+    return `${hh}:${mm}:${ss} ${day}/${month}/${year}`;
+};
 const tabOrders = computed(() => {
     const rows = Array.isArray(orders.value) ? orders.value : [];
     if (activeTab.value === "pending") {
@@ -67,13 +95,17 @@ const retryPayment = async (order) => {
         </div>
         <div class="card">
             <table>
-                <thead><tr><th>Mã đơn</th><th>Ngày</th><th>Trạng thái</th><th>Địa chỉ</th><th></th></tr></thead>
+                <thead><tr><th>Mã đơn</th><th>Ngày đặt  </th><th>Trạng thái</th><th v-if="activeTab === 'placed'">Dự kiến nhận hàng</th><th v-if="activeTab === 'delivered'">Thời gian giao</th><th>Địa chỉ giao hàng</th><th></th></tr></thead>
                 <tbody>
                 <tr v-for="o in tabOrders" :key="o.id">
                     <td>{{ o.id }}</td>
                     <td>{{ dateTime(o.createDate) }}</td>
                     <td><span class="badge" style="color:black;">{{ statusLabel(o.status) }}</span></td>
-                    <td>{{ o.address }}</td>
+                    <td v-if="activeTab === 'placed'">{{ formatExpectedDelivery(o) }}</td>
+                    <td v-if="activeTab === 'delivered'">{{ formatDeliveredTime(o.deliveredAt) }}</td>
+                    <td>
+                        <div class="order-address-scroll">{{ o.address }}</div>
+                    </td>
                     <td class="table-actions">
                         <button
                             v-if="isPendingPayment(o.status)"
@@ -94,7 +126,7 @@ const retryPayment = async (order) => {
                     </td>
                 </tr>
                 <tr v-if="!tabOrders.length">
-                    <td colspan="5" class="order-empty-row">Không có đơn hàng trong mục này.</td>
+                    <td :colspan="activeTab === 'placed' || activeTab === 'delivered' ? 6 : 5" class="order-empty-row">Không có đơn hàng trong mục này.</td>
                 </tr>
                 </tbody>
             </table>
@@ -131,5 +163,12 @@ const retryPayment = async (order) => {
     text-align: center;
     color: #6b7280;
     padding: 16px;
+}
+
+.order-address-scroll {
+    max-width: 460px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 4px;
 }
 </style>

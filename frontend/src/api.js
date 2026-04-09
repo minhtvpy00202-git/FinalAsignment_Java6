@@ -200,7 +200,7 @@ export const api = {
             remove: (id) => request(`/api/admin/products/${id}`, {method: "DELETE"})
         },
         orders: {
-            list: () => request("/api/admin/orders"),
+            list: (params) => request(`/api/admin/orders${toQuery(params)}`),
             detail: (id) => request(`/api/admin/orders/${id}`),
             updateStatus: (id, status) => request(`/api/admin/orders/${id}/status${toQuery({status})}`, {method: "PUT"}),
             remove: (id) => request(`/api/admin/orders/${id}`, {method: "DELETE"}),

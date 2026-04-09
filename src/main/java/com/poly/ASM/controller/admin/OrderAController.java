@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.payos.exception.PayOSException;
 
 import java.sql.ResultSetMetaData;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -43,11 +44,45 @@ public class OrderAController {
     private final PayosPaymentService payosPaymentService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<?>> index() {
-        List<Order> filtered = orderService.findAll().stream()
-                .filter(order -> order != null && !"PENDING_PAYMENT".equals(order.getStatus()))
+    public ResponseEntity<ApiResponse<?>> index(@RequestParam(value = "tab", required = false, defaultValue = "pending") String tab,
+                                                @RequestParam(value = "page", required = false, defaultValue = "0") Integer page,
+                                                @RequestParam(value = "size", required = false, defaultValue = "10") Integer size) {
+        String normalizedTab = tab == null ? "pending" : tab.trim().toLowerCase(Locale.ROOT);
+        int safePage = page == null || page < 0 ? 0 : page;
+        int safeSize = size == null || size <= 0 ? 10 : Math.min(size, 100);
+        List<Map<String, Object>> filtered = orderService.findAll().stream()
+                .filter(order -> order != null)
+                .filter(order -> isInTab(order.getStatus(), normalizedTab))
+                .map(order -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("id", order.getId());
+                    item.put("status", order.getStatus());
+                    item.put("address", order.getAddress());
+                    item.put("createDate", order.getCreateDate());
+                    item.put("expectedDeliveryDate", findOrderExpectedDeliveryDate(order.getId()).orElse(""));
+                    item.put("deliveryDistanceM", findOrderDeliveryDistanceMeters(order.getId()).orElse(0L));
+                    item.put("deliveredAt", findOrderDeliveredAt(order.getId()).orElse(null));
+                    if (order.getAccount() != null) {
+                        Map<String, Object> account = new HashMap<>();
+                        account.put("username", order.getAccount().getUsername());
+                        item.put("account", account);
+                    } else {
+                        item.put("account", null);
+                    }
+                    return item;
+                })
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng quản trị thành công", filtered));
+        int from = Math.min(safePage * safeSize, filtered.size());
+        int to = Math.min(from + safeSize, filtered.size());
+        int totalPages = safeSize == 0 ? 0 : (int) Math.ceil(filtered.size() / (double) safeSize);
+        Map<String, Object> data = new HashMap<>();
+        data.put("rows", filtered.subList(from, to));
+        data.put("page", safePage);
+        data.put("size", safeSize);
+        data.put("totalPages", totalPages);
+        data.put("totalElements", filtered.size());
+        data.put("tab", normalizedTab);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng quản trị thành công", data));
     }
 
     @GetMapping("/{id}")
@@ -112,6 +147,7 @@ public class OrderAController {
             }
             order.setStatus(status);
             orderService.update(order);
+            updateOrderDeliveredTime(order.getId(), previous, status);
             if (previous == null || !previous.equals(status)) {
                 notificationService.notifyOrderStatusChange(order, status);
             }
@@ -237,6 +273,17 @@ public class OrderAController {
         }
     }
 
+    private boolean isInTab(String status, String tab) {
+        String current = status == null ? "" : status;
+        if ("placed".equals(tab)) {
+            return "PLACED_UNPAID".equals(current) || "PLACED_PAID".equals(current);
+        }
+        if ("delivered".equals(tab)) {
+            return "DELIVERED_SUCCESS".equals(current) || "DONE".equals(current);
+        }
+        return "PENDING_PAYMENT".equals(current);
+    }
+
     private Optional<String> findOrderShippingPhone(Long orderId) {
         ensureOrderShippingPhoneColumn();
         try {
@@ -262,4 +309,92 @@ public class OrderAController {
         } catch (Exception ignored) {
         }
     }
+
+    private Optional<String> findOrderExpectedDeliveryDate(Long orderId) {
+        ensureOrderDeliveryColumns();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select convert(varchar(10), expected_delivery_date, 23) from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<Long> findOrderDeliveryDistanceMeters(Long orderId) {
+        ensureOrderDeliveryColumns();
+        try {
+            Long value = jdbcTemplate.queryForObject(
+                    "select delivery_distance_m from dbo.orders where id = ?",
+                    Long.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> findOrderDeliveredAt(Long orderId) {
+        ensureOrderDeliveredTimeColumn();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select convert(varchar(19), delivered_at, 120) from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private void ensureOrderDeliveryColumns() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'delivery_distance_m') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivery_distance_m BIGINT NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'expected_delivery_date') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD expected_delivery_date DATE NULL;
+                END
+            """);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void ensureOrderDeliveredTimeColumn() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'delivered_at') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivered_at DATETIME2 NULL;
+                END
+            """);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void updateOrderDeliveredTime(Long orderId, String previousStatus, String nextStatus) {
+        if (orderId == null) {
+            return;
+        }
+        ensureOrderDeliveredTimeColumn();
+        boolean wasDelivered = "DELIVERED_SUCCESS".equals(previousStatus) || "DONE".equals(previousStatus);
+        boolean nowDelivered = "DELIVERED_SUCCESS".equals(nextStatus) || "DONE".equals(nextStatus);
+        try {
+            if (!wasDelivered && nowDelivered) {
+                jdbcTemplate.update("update dbo.orders set delivered_at = ? where id = ?", new Timestamp(System.currentTimeMillis()), orderId);
+            } else if (wasDelivered && !nowDelivered) {
+                jdbcTemplate.update("update dbo.orders set delivered_at = null where id = ?", orderId);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
 }

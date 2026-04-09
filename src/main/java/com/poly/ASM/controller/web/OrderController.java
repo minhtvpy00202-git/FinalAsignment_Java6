@@ -44,12 +44,14 @@ import java.math.RoundingMode;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.ResultSetMetaData;
+import java.sql.Date;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/order-workflow")
@@ -89,6 +91,9 @@ public class OrderController {
                                                    @RequestParam(value = "shippingPhone", required = false) String shippingPhone,
                                                    @RequestParam(value = "lat", required = false) Double lat,
                                                    @RequestParam(value = "lng", required = false) Double lng,
+                                                   @RequestParam(value = "deliveryDistanceMeters", required = false) Long deliveryDistanceMeters,
+                                                   @RequestParam(value = "expectedDeliveryDate", required = false) String expectedDeliveryDate,
+                                                   @RequestParam(value = "expectedDeliveryLabel", required = false) String expectedDeliveryLabel,
                                                    @RequestParam("paymentMethod") String paymentMethod) {
         boolean bankPayment = "BANK".equalsIgnoreCase(paymentMethod);
         Account user = authService.getUser();
@@ -167,6 +172,7 @@ public class OrderController {
         updateOrderAdministrative(savedOrder.getId(), normalizedProvinceCode, normalizedWardCode);
         updateOrderCoordinates(savedOrder.getId(), lat, lng);
         updateOrderShippingPhone(savedOrder.getId(), resolvedShippingPhone);
+        updateOrderDeliveryEstimate(savedOrder.getId(), deliveryDistanceMeters, expectedDeliveryDate, expectedDeliveryLabel);
         notificationService.notifyOrderPlacedForUser(user, savedOrder);
         notificationService.notifyOrderPlacedForAdmins(savedOrder);
         for (CartItem item : items) {
@@ -452,6 +458,10 @@ public class OrderController {
             item.put("id", order.getId());
             item.put("address", order.getAddress());
             item.put("shippingPhone", findOrderShippingPhone(order.getId()).orElse(""));
+            item.put("expectedDeliveryLabel", findOrderExpectedDeliveryLabel(order.getId()).orElse(""));
+            item.put("expectedDeliveryDate", findOrderExpectedDeliveryDate(order.getId()).orElse(""));
+            item.put("deliveryDistanceM", findOrderDeliveryDistanceMeters(order.getId()).orElse(0L));
+            item.put("deliveredAt", findOrderDeliveredAt(order.getId()).orElse(null));
             item.put("status", order.getStatus());
             item.put("createDate", order.getCreateDate());
             result.add(item);
@@ -590,6 +600,10 @@ public class OrderController {
         orderData.put("id", order.getId());
         orderData.put("address", order.getAddress());
         orderData.put("shippingPhone", findOrderShippingPhone(order.getId()).orElse(""));
+        orderData.put("expectedDeliveryLabel", findOrderExpectedDeliveryLabel(order.getId()).orElse(""));
+        orderData.put("expectedDeliveryDate", findOrderExpectedDeliveryDate(order.getId()).orElse(""));
+        orderData.put("deliveryDistanceM", findOrderDeliveryDistanceMeters(order.getId()).orElse(0L));
+        orderData.put("deliveredAt", findOrderDeliveredAt(order.getId()).orElse(null));
         orderData.put("status", order.getStatus());
         orderData.put("createDate", order.getCreateDate());
         return orderData;
@@ -781,6 +795,31 @@ public class OrderController {
         }
     }
 
+    private void updateOrderDeliveryEstimate(Long orderId, Long distanceMeters, String expectedDeliveryDate, String expectedDeliveryLabel) {
+        if (orderId == null) {
+            return;
+        }
+        ensureOrderDeliveryColumns();
+        Date expectedDate = null;
+        try {
+            if (expectedDeliveryDate != null && !expectedDeliveryDate.isBlank()) {
+                expectedDate = Date.valueOf(LocalDate.parse(expectedDeliveryDate.trim()));
+            }
+        } catch (Exception ignored) {
+            expectedDate = null;
+        }
+        try {
+            jdbcTemplate.update(
+                    "update dbo.orders set delivery_distance_m = ?, expected_delivery_date = ?, expected_delivery_label = ? where id = ?",
+                    distanceMeters,
+                    expectedDate,
+                    firstNonBlank(expectedDeliveryLabel, ""),
+                    orderId
+            );
+        } catch (Exception ignored) {
+        }
+    }
+
     private Optional<String> findOrderShippingPhone(Long orderId) {
         if (orderId == null) {
             return Optional.empty();
@@ -798,12 +837,112 @@ public class OrderController {
         }
     }
 
+    private Optional<String> findOrderExpectedDeliveryLabel(Long orderId) {
+        if (orderId == null) {
+            return Optional.empty();
+        }
+        ensureOrderDeliveryColumns();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select expected_delivery_label from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> findOrderExpectedDeliveryDate(Long orderId) {
+        if (orderId == null) {
+            return Optional.empty();
+        }
+        ensureOrderDeliveryColumns();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select convert(varchar(10), expected_delivery_date, 23) from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<Long> findOrderDeliveryDistanceMeters(Long orderId) {
+        if (orderId == null) {
+            return Optional.empty();
+        }
+        ensureOrderDeliveryColumns();
+        try {
+            Long value = jdbcTemplate.queryForObject(
+                    "select delivery_distance_m from dbo.orders where id = ?",
+                    Long.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> findOrderDeliveredAt(Long orderId) {
+        if (orderId == null) {
+            return Optional.empty();
+        }
+        ensureOrderDeliveredTimeColumn();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select convert(varchar(19), delivered_at, 120) from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
     private void ensureOrderShippingPhoneColumn() {
         try {
             jdbcTemplate.execute("""
                 IF COL_LENGTH('dbo.orders', 'shipping_phone') IS NULL
                 BEGIN
                     ALTER TABLE dbo.orders ADD shipping_phone NVARCHAR(20) NULL;
+                END
+            """);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void ensureOrderDeliveryColumns() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'delivery_distance_m') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivery_distance_m BIGINT NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'expected_delivery_date') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD expected_delivery_date DATE NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'expected_delivery_label') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD expected_delivery_label NVARCHAR(100) NULL;
+                END
+            """);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void ensureOrderDeliveredTimeColumn() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'delivered_at') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD delivered_at DATETIME2 NULL;
                 END
             """);
         } catch (Exception ignored) {

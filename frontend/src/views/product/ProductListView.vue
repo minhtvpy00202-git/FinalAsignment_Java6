@@ -15,6 +15,16 @@ const finalPrice = (product) => {
     const percent = discountPercent(product);
     return Math.max(0, price - (price * percent / 100));
 };
+const canPrevPage = () => Number(filter.page || 0) > 0;
+const canNextPage = () => {
+    const total = Number(data.value?.totalPages || 1);
+    return Number(filter.page || 0) + 1 < total;
+};
+const pageLabel = () => {
+    const current = Number(data.value?.currentPage ?? filter.page ?? 0) + 1;
+    const total = Number(data.value?.totalPages || 0);
+    return `Trang ${current}/${total}`;
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -211,15 +221,15 @@ const clearFilters = async () => {
                     </div>
                     
                     <nav class="pagination-wrapper" v-if="(data.totalPages || 0) > 1">
-                        <ul class="pagination">
+                        <ul class="pagination pagination--catalog">
                             <li class="page-item">
-                                <button class="page-link" type="button" @click="prev">Trước</button>
+                                <button class="page-link page-link--nav" type="button" @click="prev" :disabled="!canPrevPage()">← Trước</button>
                             </li>
-                            <li class="page-item active">
-                                <span class="page-link">[{{ (data.currentPage || 0) + 1 }}] / [{{ data.totalPages || 0 }}]</span>
+                            <li class="page-item page-item--indicator">
+                                <span class="page-link page-link--indicator">{{ pageLabel() }}</span>
                             </li>
                             <li class="page-item">
-                                <button class="page-link" type="button" @click="next">Sau</button>
+                                <button class="page-link page-link--nav" type="button" @click="next" :disabled="!canNextPage()">Sau →</button>
                             </li>
                         </ul>
                     </nav>
@@ -228,3 +238,34 @@ const clearFilters = async () => {
         </div>
     </main>
 </template>
+
+<style scoped>
+.pagination--catalog {
+    gap: 12px;
+    align-items: center;
+}
+
+.page-link--nav {
+    min-width: 130px;
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+.page-link--nav:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    background: #f3f4f6;
+    color: #6b7280;
+    border-color: #e5e7eb;
+}
+
+.page-link--indicator {
+    border-radius: 12px;
+    background: #111827;
+    color: #fff;
+    border-color: #111827;
+    min-width: 160px;
+    text-align: center;
+    font-weight: 700;
+}
+</style>

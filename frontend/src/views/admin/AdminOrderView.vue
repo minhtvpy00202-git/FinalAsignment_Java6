@@ -4,7 +4,7 @@ import {useRoute} from "vue-router";
 import {AdminOrderPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 
-const {rows, selected, status, payosCode, msg, detail: fetchDetail, updateStatus: persistStatus, cancelPayos, remove} = AdminOrderPage.setup();
+const {rows, selected, status, payosCode, msg, paging, load, toPrevPage, toNextPage, detail: fetchDetail, updateStatus: persistStatus, cancelPayos, remove} = AdminOrderPage.setup();
 const route = useRoute();
 const mapRef = ref(null);
 const detailModalOpen = ref(false);
@@ -14,6 +14,7 @@ const actionModalOpen = ref(false);
 const confirmModalOpen = ref(false);
 const confirmMessage = ref("");
 const simulatingDelivery = ref(false);
+const activeTab = ref("pending");
 const hasValidDestination = ref(false);
 const mapInfo = ref("");
 const deliveryButtonLabel = ref("Giao hàng");
@@ -38,6 +39,36 @@ const statusLabel = (value) => {
 };
 const isDelivered = (value) => value === "DELIVERED_SUCCESS" || value === "DONE";
 const statusColor = (value) => isDelivered(value) ? "#64d441" : "#b62c54";
+const formatExpectedDelivery = (order) => {
+    const date = String(order?.expectedDeliveryDate || "").trim();
+    const distanceM = Number(order?.deliveryDistanceM || 0);
+    if (!date) {
+        return "Chưa có";
+    }
+    const [year, month, day] = date.split("-");
+    const dateLabel = year && month && day ? `${day}/${month}/${year}` : date;
+    const km = distanceM > 0 ? `${(distanceM / 1000).toFixed(distanceM >= 10000 ? 0 : 1)} km` : "";
+    return km ? `${dateLabel} • ${km}` : dateLabel;
+};
+const formatDeliveredTime = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) {
+        return "Chưa có";
+    }
+    const dt = new Date(raw.replace(" ", "T"));
+    if (Number.isNaN(dt.getTime())) {
+        return raw;
+    }
+    const day = String(dt.getDate()).padStart(2, "0");
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    const year = dt.getFullYear();
+    const hh = String(dt.getHours()).padStart(2, "0");
+    const mm = String(dt.getMinutes()).padStart(2, "0");
+    const ss = String(dt.getSeconds()).padStart(2, "0");
+    return `${hh}:${mm}:${ss} ${day}/${month}/${year}`;
+};
+const tabRows = computed(() => Array.isArray(rows.value) ? rows.value : []);
+const currentPaging = computed(() => paging?.[activeTab.value] || {page: 0, totalPages: 0, totalElements: 0});
 const statusOptions = computed(() => {
     const current = selected.value?.order?.status || "";
     if (current === "PENDING_PAYMENT") {
@@ -255,7 +286,7 @@ const initMap = async () => {
     }
 };
 const persistCurrentStatus = async () => {
-    await persistStatus();
+    await persistStatus(activeTab.value);
     await fetchDetail(selected.value.order.id);
     refreshActionUI();
 };
@@ -342,13 +373,16 @@ const confirmCancelOrder = async () => {
     updatingStatus.value = true;
     try {
         const id = selected.value.order.id;
-        await remove(id);
+        await remove(id, activeTab.value);
         closeDetailModal();
         showActionModal("Đã huỷ và xoá đơn hàng thành công.");
     } finally {
         updatingStatus.value = false;
     }
 };
+watch(activeTab, async (tab) => {
+    await load(tab);
+});
 watch(selected, async () => {
     const firstOption = statusOptions.value[0]?.value;
     if (firstOption && !statusOptions.value.some((item) => item.value === status.value)) {
@@ -365,6 +399,7 @@ onUnmounted(() => {
     destroyMap();
 });
 onMounted(async () => {
+    await load(activeTab.value);
     const queryOrderId = Number(route.query.orderId || "");
     if (Number.isFinite(queryOrderId) && queryOrderId > 0) {
         await openDetail(queryOrderId);
@@ -390,23 +425,46 @@ onMounted(async () => {
             </div>
             <div class="admin-product-main">
                 <div class="card">
+                    <div class="order-tabs">
+                        <button class="order-tab-btn" :class="{active: activeTab === 'pending'}" type="button" @click="activeTab = 'pending'">Đơn chờ thanh toán</button>
+                        <button class="order-tab-btn" :class="{active: activeTab === 'placed'}" type="button" @click="activeTab = 'placed'">Đơn đã đặt</button>
+                        <button class="order-tab-btn" :class="{active: activeTab === 'delivered'}" type="button" @click="activeTab = 'delivered'">Đơn đã giao</button>
+                    </div>
+                    <div class="table-actions" style="justify-content: space-between; margin-bottom: 10px;">
+                        <span class="status-message" style="margin:0;">Trang {{ (currentPaging.page || 0) + 1 }} / {{ currentPaging.totalPages || 0 }} — Tổng {{ currentPaging.totalElements || 0 }} đơn</span>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn btn-outline-primary" type="button" @click="toPrevPage(activeTab)" :disabled="(currentPaging.page || 0) <= 0">Trang trước</button>
+                            <button class="btn btn-outline-primary" type="button" @click="toNextPage(activeTab)" :disabled="(currentPaging.page || 0) + 1 >= (currentPaging.totalPages || 0)">Trang sau</button>
+                        </div>
+                    </div>
                     <table>
                         <thead>
                         <tr>
                             <th>Mã đơn</th>
                             <th>Username</th>
                             <th>Trạng thái</th>
-                            <th></th>
+                            <th v-if="activeTab === 'placed'">Dự kiến nhận hàng</th>
+                            <th v-if="activeTab === 'delivered'">Thời gian giao</th>
+                            <th>Địa chỉ giao hàng</th>
+                            <th v-if="activeTab !== 'pending'"></th>
                         </tr>
                         </thead>
                         <tbody>
-                        <tr v-for="o in rows" :key="o.id">
+                        <tr v-for="o in tabRows" :key="o.id">
                             <td>{{ o.id }}</td>
                             <td>{{ o.account?.username || "N/A" }}</td>
                             <td><span class="badge" :style="{color: statusColor(o.status)}">{{ statusLabel(o.status) }}</span></td>
-                            <td class="table-actions">
+                            <td v-if="activeTab === 'placed'">{{ formatExpectedDelivery(o) }}</td>
+                            <td v-if="activeTab === 'delivered'">{{ formatDeliveredTime(o.deliveredAt) }}</td>
+                            <td>
+                                <div class="order-address-scroll">{{ o.address || "" }}</div>
+                            </td>
+                            <td class="table-actions" v-if="activeTab !== 'pending'">
                                 <button class="btn btn-action-outline" type="button" @click="openDetail(o.id)">Chi tiết</button>
                             </td>
+                        </tr>
+                        <tr v-if="!tabRows.length">
+                            <td :colspan="activeTab === 'pending' ? 5 : 6" class="order-empty-row">Không có đơn hàng trong mục này.</td>
                         </tr>
                         </tbody>
                     </table>
@@ -488,3 +546,39 @@ onMounted(async () => {
         </div>
     </main>
 </template>
+
+<style scoped>
+.order-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.order-tab-btn {
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: #fff;
+    color: #111827;
+    font-weight: 600;
+    padding: 8px 14px;
+}
+
+.order-tab-btn.active {
+    background: #111827;
+    color: #fff;
+    border-color: #111827;
+}
+
+.order-address-scroll {
+    max-width: 420px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 4px;
+}
+
+.order-empty-row {
+    text-align: center;
+    color: #6b7280;
+    padding: 16px;
+}
+</style>

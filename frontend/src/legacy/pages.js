@@ -346,6 +346,9 @@ const CheckoutPage = {
             lat: "",
             lng: "",
             shippingPhone: "",
+            deliveryDistanceMeters: "",
+            expectedDeliveryDate: "",
+            expectedDeliveryLabel: "",
             paymentMethod: "BANK"
         });
         const result = ref(null);
@@ -1035,33 +1038,58 @@ const AdminOrderPage = {
         const status = ref("");
         const payosCode = ref("");
         const msg = ref("");
-        const load = async () => {
-            rows.value = (await api.admin.orders.list()).data || [];
+        const paging = reactive({
+            pending: {page: 0, size: 10, totalPages: 0, totalElements: 0},
+            placed: {page: 0, size: 10, totalPages: 0, totalElements: 0},
+            delivered: {page: 0, size: 10, totalPages: 0, totalElements: 0}
+        });
+        const load = async (tab = "pending") => {
+            const state = paging[tab] || paging.pending;
+            const payload = (await api.admin.orders.list({tab, page: state.page, size: state.size})).data || {};
+            rows.value = payload.rows || [];
+            state.totalPages = payload.totalPages || 0;
+            state.totalElements = payload.totalElements || 0;
+        };
+        const toPrevPage = async (tab = "pending") => {
+            const state = paging[tab] || paging.pending;
+            if (state.page <= 0) {
+                return;
+            }
+            state.page -= 1;
+            await load(tab);
+        };
+        const toNextPage = async (tab = "pending") => {
+            const state = paging[tab] || paging.pending;
+            if (state.page + 1 >= (state.totalPages || 0)) {
+                return;
+            }
+            state.page += 1;
+            await load(tab);
         };
         const detail = async (id) => {
             selected.value = (await api.admin.orders.detail(id)).data;
             status.value = selected.value?.order?.status || "";
             payosCode.value = selected.value?.order?.id || "";
         };
-        const updateStatus = async () => {
+        const updateStatus = async (tab = "pending") => {
             await api.admin.orders.updateStatus(selected.value.order.id, status.value);
             msg.value = "Cập nhật trạng thái thành công";
             await detail(selected.value.order.id);
-            await load();
+            await load(tab);
         };
         const cancelPayos = async () => {
             const res = await api.admin.orders.cancelPayos(payosCode.value);
             msg.value = res.message;
         };
-        const remove = async (id) => {
+        const remove = async (id, tab = "pending") => {
             await api.admin.orders.remove(id);
             if (selected.value?.order?.id === id) {
                 selected.value = null;
             }
-            await load();
+            await load(tab);
         };
-        onMounted(load);
-        return {rows, selected, status, payosCode, msg, load, detail, updateStatus, cancelPayos, remove, dateTime};
+        onMounted(() => load("pending"));
+        return {rows, selected, status, payosCode, msg, paging, load, toPrevPage, toNextPage, detail, updateStatus, cancelPayos, remove, dateTime};
     },
     template: `
       <div>
