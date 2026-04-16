@@ -87,6 +87,7 @@ public class OrderController {
         data.put("items", cartService.getCartItems());
         data.put("totalPrice", cartService.getTotalPrice());
         data.put("shippingPhone", user != null ? user.getPhone() : "");
+        data.put("address", user != null ? user.getAddress() : "");
         return ResponseEntity.ok(ApiResponse.success("Lấy dữ liệu checkout thành công", data));
     }
 

@@ -19,23 +19,34 @@ const detectType = (el) => {
     return "info";
 };
 
+const shouldIgnorePopup = (text) => {
+    const value = String(text || "").trim().toLowerCase();
+    if (!value) return true;
+    if (value.includes("đang tải") || value.includes("loading") || value.includes("đang xử lý")) return true;
+    if (value.includes("goong: on") || value.includes("goong: off")) return true;
+    if (value.includes("tạm hết hàng")) return true;
+    if (value.includes("vui lòng chọn size và số lượng")) return true;
+    return false;
+};
+
 const collectInlineNotice = () => {
     const selectors = [
-        ".status-message",
+        ".status-message.status-error",
+        ".status-message.status-success",
         ".alert.alert-danger",
         ".alert.alert-success",
         ".alert.alert-info"
     ];
     const nodes = document.querySelectorAll(selectors.join(","));
     for (const node of nodes) {
-        if (!node || node.closest(".global-notice-panel")) {
+        if (!node || node.closest(".global-notice-panel") || node.getAttribute("data-popup-hidden") === "1") {
             continue;
         }
         const text = String(node.textContent || "").trim();
-        if (!text) {
+        if (!text || shouldIgnorePopup(text)) {
             continue;
         }
-        return {text, type: detectType(node)};
+        return {text, type: detectType(node), node};
     }
     return null;
 };
@@ -46,6 +57,7 @@ const scanAndOpen = () => {
     const signature = `${found.type}::${found.text}`;
     if (signature === lastSignature.value) return;
     lastSignature.value = signature;
+    found.node?.setAttribute("data-popup-hidden", "1");
     noticeText.value = found.text;
     noticeType.value = found.type;
     noticeOpen.value = true;
@@ -93,10 +105,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-.status-message,
-.alert.alert-danger,
-.alert.alert-success,
-.alert.alert-info{
+[data-popup-hidden="1"]{
     display:none !important;
 }
 .global-notice-title{

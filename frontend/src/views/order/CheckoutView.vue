@@ -1,5 +1,5 @@
 <script setup>
-import {onMounted, ref, watch} from "vue";
+import {onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {CheckoutPage} from "@/legacy/pages";
 import {api} from "@/api";
@@ -55,15 +55,30 @@ let goongMap = null;
 let goongMarker = null;
 let geocodeTimer = null;
 let autocompleteTimer = null;
+let fullAddressTimer = null;
 let geocodeAbort = null;
 let autocompleteAbort = null;
 let reverseAbort = null;
 let suppressAutoGeocode = false;
 let selectedPlaceId = "";
 let manualAddressTyping = false;
+let applyingFullAddress = false;
 const lastGeoWarning = ref("");
 const selectedProvinceName = () => provinces.value.find((item) => item.code === selectedProvinceCode.value)?.name || "";
 const selectedWardName = () => wards.value.find((item) => item.code === selectedWardCode.value)?.name || "";
+const tryFillAddressDetailFromAccount = () => {
+    const current = String(form.addressDetail || "").trim();
+    if (current) {
+        return;
+    }
+    const raw = String(checkout.value?.address || "").trim();
+    if (!raw) {
+        return;
+    }
+    form.addressDetail = raw;
+    manualAddressTyping = true;
+    scheduleResolveFullAddressInput();
+};
 const openNotice = (text, type = "error") => {
     const message = String(text || "").trim();
     if (!message) return;
@@ -507,22 +522,97 @@ const selectAddressSuggestion = async (suggestion) => {
 };
 const onAddressInput = () => {
     manualAddressTyping = true;
-};
-const onAddressEnter = async () => {
-    const suggestions = [...addressSuggestions.value];
-    manualAddressTyping = false;
-    if (autocompleteTimer) {
-        clearTimeout(autocompleteTimer);
-    }
-    if (autocompleteAbort) {
-        autocompleteAbort.abort();
-    }
     addressSuggestions.value = [];
-    geocodeMessage.value = "";
-    if (suggestions.length) {
-        await selectAddressSuggestion(suggestions[0]);
+    scheduleResolveFullAddressInput();
+};
+const findProvinceFromParts = (parts) => {
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+        const part = parts[index];
+        const matched = matchByNameStrict(provinces.value, part) || matchByName(provinces.value, part);
+        if (matched) {
+            return {province: matched, provinceIndex: index};
+        }
+    }
+    return null;
+};
+const resolveWardFromParts = (parts, provinceIndex) => {
+    const candidates = parts.slice(0, provinceIndex).reverse();
+    for (const part of candidates) {
+        const matched = matchByNameStrict(wards.value, part) || matchByName(wards.value, part);
+        if (matched) {
+            return matched;
+        }
+    }
+    return null;
+};
+const streetDetailFromParts = (parts, provinceIndex, ward) => {
+    let endIndex = provinceIndex;
+    if (ward) {
+        const wardIndex = parts.findIndex((part) => isAdministrativeMatch(part, ward.name));
+        if (wardIndex > 0) {
+            endIndex = Math.min(endIndex, wardIndex);
+        }
+    }
+    const detailParts = parts.slice(0, Math.max(1, endIndex));
+    return detailParts.join(", ").trim();
+};
+const tryResolveFullAddressInput = async () => {
+    if (applyingFullAddress) {
         return;
     }
+    const raw = String(form.addressDetail || "").trim();
+    if (!raw || !raw.includes(",") || !provinces.value.length) {
+        return;
+    }
+    const parts = raw.split(",").map((part) => part.trim()).filter((part) => part !== "");
+    if (parts.length < 2) {
+        return;
+    }
+    const provinceMatch = findProvinceFromParts(parts);
+    if (!provinceMatch?.province) {
+        return;
+    }
+    applyingFullAddress = true;
+    try {
+        const province = provinceMatch.province;
+        if (selectedProvinceCode.value !== province.code) {
+            selectedProvinceCode.value = province.code;
+            form.provinceCode = province.code;
+            await loadWards(province.code);
+        } else if (!wards.value.length) {
+            await loadWards(province.code);
+        }
+        const ward = resolveWardFromParts(parts, provinceMatch.provinceIndex);
+        if (ward) {
+            selectedWardCode.value = ward.code;
+            form.wardCode = ward.code;
+        }
+        const detail = streetDetailFromParts(parts, provinceMatch.provinceIndex, ward);
+        if (detail) {
+            form.addressDetail = detail;
+        }
+        selectedPlaceId = "";
+        manualAddressTyping = false;
+        addressSuggestions.value = [];
+        geocodeMessage.value = "";
+        syncAddress();
+        await geocodeAddress();
+    } finally {
+        applyingFullAddress = false;
+    }
+};
+const scheduleResolveFullAddressInput = () => {
+    if (fullAddressTimer) {
+        clearTimeout(fullAddressTimer);
+    }
+    fullAddressTimer = setTimeout(() => {
+        tryResolveFullAddressInput();
+    }, 280);
+};
+const onAddressEnter = async () => {
+    manualAddressTyping = false;
+    addressSuggestions.value = [];
+    geocodeMessage.value = "";
     selectedPlaceId = "";
     await geocodeAddress();
 };
@@ -795,10 +885,8 @@ watch(() => form.addressDetail, () => {
     scheduleGeocode();
     if (manualAddressTyping) {
         selectedPlaceId = "";
-        scheduleAutocomplete();
-    } else {
-        addressSuggestions.value = [];
     }
+    addressSuggestions.value = [];
     manualAddressTyping = false;
 });
 onMounted(async () => {
@@ -855,38 +943,41 @@ onMounted(async () => {
             selectedWardCode.value = form.wardCode;
         }
         syncAddress();
+        tryFillAddressDetailFromAccount();
     } catch (e) {
         geocodeMessage.value = "Không tải được danh mục địa chỉ hành chính.";
     }
 });
-watch(error, (value) => {
-    const message = String(value || "").trim();
-    if (!message || message === lastNoticeText.value || !shouldShowErrorNotice(message)) {
-        return;
+onBeforeUnmount(() => {
+    if (fullAddressTimer) {
+        clearTimeout(fullAddressTimer);
     }
-    openNotice(message, "error");
 });
-watch(geocodeMessage, (value) => {
-    const message = String(value || "").trim();
-    if (!message || message === lastNoticeText.value || !shouldShowErrorNotice(message)) {
-        return;
-    }
-    openNotice(message, "error");
-});
+watch(() => checkout.value?.address, () => {
+    tryFillAddressDetailFromAccount();
+}, {immediate: true});
 const submitCheckout = async () => {
+    const showSubmitError = (message) => {
+        const text = String(message || "").trim();
+        if (!text) return;
+        geocodeMessage.value = text;
+        if (shouldShowErrorNotice(text)) {
+            openNotice(text, "error");
+        }
+    };
     if (!form.provinceCode || !form.wardCode) {
-        geocodeMessage.value = "Vui lòng chọn đầy đủ tỉnh/thành và phường/xã.";
+        showSubmitError("Vui lòng chọn đầy đủ tỉnh/thành và phường/xã.");
         return;
     }
     const destinationLat = Number(form.lat);
     const destinationLng = Number(form.lng);
     if (!Number.isFinite(destinationLat) || !Number.isFinite(destinationLng)) {
-        geocodeMessage.value = "Vui lòng chọn vị trí nhận hàng trên bản đồ để tính thời gian giao dự kiến.";
+        showSubmitError("Vui lòng chọn vị trí nhận hàng trên bản đồ để tính thời gian giao dự kiến.");
         return;
     }
     const estimate = await calculateDeliveryEstimate(destinationLat, destinationLng);
     if (!estimate) {
-        geocodeMessage.value = "Không tính được quãng đường giao hàng từ Goong. Vui lòng thử lại.";
+        showSubmitError("Không tính được quãng đường giao hàng từ Goong. Vui lòng thử lại.");
         return;
     }
     form.deliveryDistanceMeters = String(estimate.distanceMeters);
@@ -897,6 +988,11 @@ const submitCheckout = async () => {
     placing.value = true;
     await submit();
     placing.value = false;
+    const submitError = String(error.value || "").trim();
+    if (submitError) {
+        showSubmitError(submitError);
+        return;
+    }
     const orderId = result.value?.data?.orderId;
     const nextAction = result.value?.data?.nextAction;
     if (!orderId) {
@@ -1034,6 +1130,7 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
                         <div class="form-group">
                             <label>Số nhà, tên đường</label>
                             <input v-model="form.addressDetail" class="form-control" placeholder="Ví dụ: 123 Lê Lợi" required @input="onAddressInput" @keydown.enter.prevent="onAddressEnter">
+                            <div class="checkout-address-hint">Có thể nhập đầy đủ: số nhà, phường/xã, tỉnh/thành</div>
                             <div v-if="addressSuggestions.length" class="order-address-suggestions">
                                 <button
                                     v-for="suggestion in addressSuggestions"
@@ -1048,11 +1145,6 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
                         </div>
                         
                         <div class="checkout-map" ref="mapRef"></div>
-                        <div v-if="isDevMode" class="status-message" :class="goongEnabled ? 'status-success' : 'status-error'">
-                            Goong: {{ goongEnabled ? "ON" : "OFF" }}
-                        </div>
-                        
-
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Latitude</label>
@@ -1147,6 +1239,11 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
 
 .order-address-suggestion-item:hover {
     background: #f7f7f7;
+}
+.checkout-address-hint{
+    margin-top: 6px;
+    font-size: 13px;
+    color: #6b7280;
 }
 .checkout-notice-panel{
     max-width: 520px;
