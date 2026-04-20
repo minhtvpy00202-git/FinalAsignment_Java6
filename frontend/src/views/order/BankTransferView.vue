@@ -12,6 +12,8 @@ const checkingStatus = ref(false);
 const copiedKey = ref("");
 const cancelModalOpen = ref(false);
 const autoCancelSent = ref(false);
+const paidSuccessModalOpen = ref(false);
+const paidRedirecting = ref(false);
 const transferContent = () => String(data.value?.order?.id || orderId.value || "").trim();
 const copyText = async (key, text) => {
     if (!text) {
@@ -30,14 +32,17 @@ const copyText = async (key, text) => {
 };
 let pollTimer = null;
 const toOrderDetail = async () => {
-    if (!orderId.value) {
+    if (!orderId.value || paidRedirecting.value) {
         return;
     }
+    paidRedirecting.value = true;
+    paymentMessage.value = "";
+    paidSuccessModalOpen.value = true;
+};
+const closePaidSuccessModal = async () => {
+    paidSuccessModalOpen.value = false;
     autoCancelSent.value = true;
-    paymentMessage.value = "Đang chuyển đến chi tiết đơn hàng...";
-    setTimeout(() => {
-        router.push(`/order/order-detail?id=${orderId.value}`);
-    }, 600);
+    await router.push(`/order/order-detail?id=${orderId.value}`);
 };
 watch(() => data.value?.status, (newStatus) => {
     if (newStatus && newStatus !== "PENDING_PAYMENT") {
@@ -222,6 +227,22 @@ onUnmounted(() => {
                 </div>
                 <div class="admin-form-actions" style="justify-content: center;">
                     <button class="btn btn-primary" type="button" @click="goHome">Về trang chủ</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: paidSuccessModalOpen}" v-if="paidSuccessModalOpen">
+            <div class="admin-modal-panel" style="max-width: 420px; text-align: center;">
+                <div class="modal-header" style="justify-content: center; border-bottom: none; padding-bottom: 0;">
+                    <div style="width: 60px; height: 60px; background: #e8f5e9; color: #4caf50; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto;">
+                        ✓
+                    </div>
+                </div>
+                <div style="padding: 20px 0;">
+                    <h4 style="margin-bottom: 10px;">Thanh toán thành công</h4>
+                    <p style="color: #666; font-size: 15px;">Hệ thống đã xác nhận chuyển khoản cho đơn #{{ orderId }}.</p>
+                </div>
+                <div class="admin-form-actions" style="justify-content: center;">
+                    <button class="btn btn-primary" type="button" @click="closePaidSuccessModal">Xem chi tiết đơn</button>
                 </div>
             </div>
         </div>

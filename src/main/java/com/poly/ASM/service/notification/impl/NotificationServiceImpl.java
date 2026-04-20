@@ -124,6 +124,18 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public void notifyRefundResultForUser(Account account, Long orderId, boolean approved, String reason) {
+        if (account == null) {
+            return;
+        }
+        String title = approved ? "Yêu cầu hoàn tiền đã được duyệt" : "Yêu cầu hoàn tiền bị từ chối";
+        String content = approved
+                ? "Yêu cầu hoàn tiền cho đơn #" + orderId + " đã được chấp nhận."
+                : "Yêu cầu hoàn tiền cho đơn #" + orderId + " bị từ chối. Lý do: " + (reason == null || reason.isBlank() ? "Không có" : reason);
+        createNotification(account, null, title, content);
+    }
+
+    @Override
     public long countUnread(String username) {
         return notificationRepository.countByAccountUsernameAndReadFalse(username);
     }

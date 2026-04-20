@@ -804,19 +804,18 @@ public class OrderController {
             return ResponseEntity.badRequest().body(ApiResponse.error("Chỉ cho phép yêu cầu hoàn tiền với đơn đã thanh toán ở trạng thái đã đặt.", null));
         }
         ensureRefundRequestTable();
+        Integer exists = jdbcTemplate.queryForObject(
+                "select count(1) from dbo.order_refund_requests where order_id = ?",
+                Integer.class,
+                orderId
+        );
+        if (exists != null && exists > 0) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Đơn hàng này đã gửi yêu cầu hoàn tiền trước đó.", null));
+        }
         jdbcTemplate.update("""
-                IF EXISTS (SELECT 1 FROM dbo.order_refund_requests WHERE order_id = ?)
-                BEGIN
-                    UPDATE dbo.order_refund_requests
-                    SET status = 'PENDING', decline_reason = NULL, decided_at = NULL
-                    WHERE order_id = ?
-                END
-                ELSE
-                BEGIN
-                    INSERT INTO dbo.order_refund_requests(order_id, username, status, decline_reason, created_at, decided_at)
-                    VALUES(?, ?, 'PENDING', NULL, GETDATE(), NULL)
-                END
-                """, orderId, orderId, orderId, user.getUsername());
+                INSERT INTO dbo.order_refund_requests(order_id, username, status, decline_reason, created_at, decided_at)
+                VALUES(?, ?, 'PENDING', NULL, GETDATE(), NULL)
+                """, orderId, user.getUsername());
         order.setStatus("REFUND_REQUEST");
         orderService.update(order);
         notificationService.notifyRefundRequestForAdmins(order);

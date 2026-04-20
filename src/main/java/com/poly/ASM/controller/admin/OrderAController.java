@@ -167,6 +167,7 @@ public class OrderAController {
         if (pending == null || pending == 0) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Đơn hàng không ở trạng thái chờ hoàn tiền.", null));
         }
+        Order order = orderService.findById(id).orElse(null);
         notificationService.deleteByOrderId(id);
         productReviewRepository.deleteByOrderId(id);
         orderDetailService.deleteByOrderId(id);
@@ -176,6 +177,9 @@ public class OrderAController {
                 SET status = 'SUCCESS', decline_reason = NULL, decided_at = GETDATE()
                 WHERE order_id = ?
                 """, id);
+        if (order != null) {
+            notificationService.notifyRefundResultForUser(order.getAccount(), id, true, null);
+        }
         return ResponseEntity.ok(ApiResponse.success("Đã duyệt hoàn tiền và xoá đơn hàng.", Map.of("orderId", id, "status", "SUCCESS")));
     }
 
@@ -203,6 +207,7 @@ public class OrderAController {
         orderService.findById(id).ifPresent(order -> {
             order.setStatus("PLACED_PAID");
             orderService.update(order);
+            notificationService.notifyRefundResultForUser(order.getAccount(), id, false, safeReason);
         });
         return ResponseEntity.ok(ApiResponse.success("Đã từ chối yêu cầu hoàn tiền.", Map.of("orderId", id, "status", "DECLINED")));
     }

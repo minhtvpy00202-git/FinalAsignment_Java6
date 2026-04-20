@@ -15,12 +15,19 @@ const finalPrice = (product) => {
 
 const route = useRoute();
 const router = useRouter();
+const normalizeSortValue = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (raw === "priceAsc") return "price_asc";
+    if (raw === "priceDesc") return "price_desc";
+    return raw;
+};
 
 // Restore filter state from URL on mount
 onMounted(() => {
     if (route.query.keyword) filter.keyword = route.query.keyword;
     if (route.query.categoryId) filter.categoryId = route.query.categoryId;
-    if (route.query.sort) filter.sort = route.query.sort;
+    if (route.query.sort) filter.sort = normalizeSortValue(route.query.sort);
     if (route.query.page) filter.page = Number(route.query.page);
     load();
 });
@@ -30,7 +37,7 @@ watch(filter, (newFilter) => {
     const query = {};
     if (newFilter.keyword) query.keyword = newFilter.keyword;
     if (newFilter.categoryId) query.categoryId = newFilter.categoryId;
-    if (newFilter.sort) query.sort = newFilter.sort;
+    if (newFilter.sort) query.sort = normalizeSortValue(newFilter.sort);
     if (newFilter.page > 0) query.page = newFilter.page;
     
     router.replace({ query }).catch(() => {});
@@ -176,8 +183,8 @@ onUnmounted(() => {
                         </select>
                         <select v-model="filter.sort" class="form-control" @change="applySelectFilters">
                             <option value="">Sắp xếp</option>
-                            <option value="priceAsc">Giá tăng dần</option>
-                            <option value="priceDesc">Giá giảm dần</option>
+                            <option value="price_asc">Giá tăng dần</option>
+                            <option value="price_desc">Giá giảm dần</option>
                         </select>
                         <button class="btn btn-primary" @click="applySearchFilters">Tìm kiếm</button>
                     </div>

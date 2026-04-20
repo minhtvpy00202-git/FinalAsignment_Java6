@@ -999,10 +999,10 @@ const submitCheckout = async () => {
         return;
     }
     if (nextAction === "BANK_TRANSFER" || (form.paymentMethod || "").toUpperCase() === "BANK") {
-        pendingRedirect.value = `/order/bank-transfer?id=${orderId}`;
-    } else {
-        pendingRedirect.value = `/order/order-detail?id=${orderId}`;
+        await router.push(`/order/bank-transfer?id=${orderId}`);
+        return;
     }
+    pendingRedirect.value = `/order/order-detail?id=${orderId}`;
     openNotice(`Đặt hàng thành công! Mã đơn hàng: ${orderId}`, "success");
     return;
 };

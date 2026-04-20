@@ -30,6 +30,9 @@ let destMarker = null;
 let routeLine = null;
 let simulateTimer = null;
 const routingWarning = ref("");
+const money = (value) => Number(value || 0).toLocaleString("vi-VN");
+const detailLineTotal = (detail) => Number(detail?.price || 0) * Number(detail?.quantity || 0);
+const detailTotalAmount = computed(() => (selected.value?.details || []).reduce((sum, item) => sum + detailLineTotal(item), 0));
 const statusLabel = (value) => {
     const labels = {
         PENDING_PAYMENT: "Đang chờ thanh toán",
@@ -39,12 +42,28 @@ const statusLabel = (value) => {
         SHIPPING_PAID: "Đang giao - Đã TT",
         DELIVERED_SUCCESS: "Giao hàng thành công",
         DELIVERY_FAILED: "Giao hàng thất bại",
-        REFUND_REQUEST: "Yêu cầu hoàn tiền"
+        REFUND_REQUEST: "Chờ xử lý hoàn tiền",
+        SUCCESS: "Đã chấp nhận hoàn tiền",
+        DECLINED: "Đã từ chối hoàn tiền",
+        DECLINE: "Đã từ chối hoàn tiền"
     };
     return labels[value] || value || "Không rõ";
 };
 const isDelivered = (value) => value === "DELIVERED_SUCCESS" || value === "DONE";
 const statusColor = (value) => isDelivered(value) ? "#64d441" : "#b62c54";
+const refundStatusStyle = (value) => {
+    const key = String(value || "").toUpperCase();
+    if (key === "REFUND_REQUEST") {
+        return {background: "#fef3c7", color: "#92400e", border: "1px solid #f59e0b"};
+    }
+    if (key === "SUCCESS") {
+        return {background: "#dcfce7", color: "#166534", border: "1px solid #22c55e"};
+    }
+    if (key === "DECLINED") {
+        return {background: "#fee2e2", color: "#991b1b", border: "1px solid #ef4444"};
+    }
+    return null;
+};
 const formatExpectedDelivery = (order) => {
     const date = String(order?.expectedDeliveryDate || "").trim();
     const distanceM = Number(order?.deliveryDistanceM || 0);
@@ -405,8 +424,8 @@ const openDeclineModal = (id) => {
     declineReason.value = "";
     declineModalOpen.value = true;
 };
-const closeDeclineModal = () => {
-    if (decliningRefund.value) return;
+const closeDeclineModal = (force = false) => {
+    if (!force && decliningRefund.value) return;
     declineModalOpen.value = false;
     declineTargetOrderId.value = null;
     declineReason.value = "";
@@ -426,7 +445,8 @@ const submitDeclineRefund = async () => {
     try {
         await api.admin.orders.declineRefund(id, reason);
         await load(activeTab.value);
-        closeDeclineModal();
+        decliningRefund.value = false;
+        closeDeclineModal(true);
         showActionModal("Đã từ chối yêu cầu hoàn tiền.");
     } catch (e) {
         showActionModal(e.message || "Không thể từ chối hoàn tiền.");
@@ -509,14 +529,22 @@ onMounted(async () => {
                         <tr v-for="o in tabRows" :key="o.id">
                             <td>{{ o.id }}</td>
                             <td>{{ o.account?.username || "N/A" }}</td>
-                            <td><span class="badge" :style="{color: statusColor(o.status)}">{{ statusLabel(o.status) }}</span></td>
+                            <td>
+                                <span
+                                    class="badge"
+                                    :class="activeTab === 'refund' ? 'refund-status-badge' : ''"
+                                    :style="activeTab === 'refund' ? refundStatusStyle(o.status) : {color: statusColor(o.status)}"
+                                >
+                                    {{ statusLabel(o.status) }}
+                                </span>
+                            </td>
                             <td v-if="activeTab === 'placed'">{{ formatExpectedDelivery(o) }}</td>
                             <td v-if="activeTab === 'delivered'">{{ formatDeliveredTime(o.deliveredAt) }}</td>
                             <td v-if="activeTab === 'refund'">{{ o.refundDeclineReason || "-" }}</td>
                             <td>
                                 <div class="order-address-scroll">{{ o.address || "" }}</div>
                             </td>
-                            <td class="table-actions" v-if="activeTab !== 'pending'">
+                            <td class="table-actions refund-actions" v-if="activeTab !== 'pending'">
                                 <button class="btn btn-action-outline" type="button" @click="openDetail(o.id)">Chi tiết</button>
                                 <template v-if="activeTab === 'refund'">
                                     <button class="btn btn-outline-primary" type="button" @click="approveRefund(o.id)">Duyệt hoàn tiền</button>
@@ -561,17 +589,20 @@ onMounted(async () => {
                         <th>Giá</th>
                         <th>SL</th>
                         <th>Size</th>
+                        <th>Thành tiền</th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr v-for="d in (selected.details || [])" :key="d.id">
                         <td>{{ d.product?.name }}</td>
-                        <td>{{ d.price }}</td>
+                        <td>{{ money(d.price) }} VNĐ</td>
                         <td>{{ d.quantity }}</td>
                         <td>{{ d.sizeName }}</td>
+                        <td>{{ money(detailLineTotal(d)) }} VNĐ</td>
                     </tr>
                     </tbody>
                 </table>
+                <div class="refund-detail-total">Tổng tiền: <strong>{{ money(detailTotalAmount) }} VNĐ</strong></div>
                 <div class="card" style="margin-top:12px;">
                     <h4>Bản đồ giao hàng</h4>
                     <div class="status-message status-error" v-if="mapInfo">{{ mapInfo }}</div>
@@ -615,6 +646,7 @@ onMounted(async () => {
                     <label>Lý do từ chối</label>
                     <textarea
                         v-model="declineReason"
+                        class="refund-reason-input"
                         rows="4"
                         placeholder="Nhập lý do để gửi cho khách hàng..."
                         :disabled="decliningRefund"
@@ -664,5 +696,39 @@ onMounted(async () => {
     text-align: center;
     color: #6b7280;
     padding: 16px;
+}
+.refund-actions{
+    gap:8px;
+    justify-content:flex-start;
+}
+.refund-actions .btn{
+    white-space:nowrap;
+}
+.refund-reason-input{
+    width:100%;
+    min-height:140px;
+    border:1px solid #d1d5db;
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:15px;
+    line-height:1.5;
+    resize:vertical;
+}
+.refund-reason-input:focus{
+    outline:none;
+    border-color:#111827;
+    box-shadow:0 0 0 2px rgba(17,24,39,.08);
+}
+.refund-detail-total{
+    margin-top:10px;
+    text-align:right;
+    font-size:16px;
+}
+.refund-status-badge{
+    text-transform:uppercase;
+    letter-spacing:.3px;
+    font-weight:700;
+    border-radius:999px;
+    padding:4px 10px;
 }
 </style>

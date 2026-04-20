@@ -21,6 +21,8 @@ public interface NotificationService {
 
     void notifyRefundRequestForAdmins(Order order);
 
+    void notifyRefundResultForUser(Account account, Long orderId, boolean approved, String reason);
+
     long countUnread(String username);
 
     List<Notification> getLatest(String username, int limit);

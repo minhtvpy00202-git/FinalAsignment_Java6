@@ -104,6 +104,17 @@ const finalPrice = (row) => {
     const p = Number(row?.finalPrice ?? row?.price ?? 0);
     return Number.isFinite(p) ? p : 0;
 };
+const lineOriginal = (detail) => Number(detail?.price || 0) * Number(detail?.quantity || 0);
+const lineDiscount = (detail) => {
+    const percent = Number(detail?.product?.discount || detail?.discount || 0);
+    const original = lineOriginal(detail);
+    if (percent <= 0) return 0;
+    return original * (percent / 100);
+};
+const lineFinal = (detail) => lineOriginal(detail) - lineDiscount(detail);
+const orderTotalBeforeDiscount = computed(() => (data.value?.details || []).reduce((sum, detail) => sum + lineOriginal(detail), 0));
+const orderTotalDiscount = computed(() => (data.value?.details || []).reduce((sum, detail) => sum + lineDiscount(detail), 0));
+const orderTotalFinal = computed(() => orderTotalBeforeDiscount.value - orderTotalDiscount.value);
 const selectedSizeId = (row) => Number(exchangeSelection[row.id]?.sizeId || 0);
 const selectedQty = (row) => Number(exchangeSelection[row.id]?.quantity || 1);
 const lineTotal = (row) => finalPrice(row) * selectedQty(row);
@@ -295,11 +306,11 @@ watch(() => route.query.orderId, initOrderByQuery);
                         <template v-for="d in (data.details||[])" :key="d.id">
                             <tr>
                                 <td><router-link class="order-detail-product-link" :to="'/product/detail?id=' + (d.product?.id || '')">{{ d.product?.name || d.productName }}</router-link></td>
-                                <td style="text-decoration: line-through; color: #999;">{{ money(d.price) }} đ</td>
-                                <td><strong style="color: #d4af37;">{{ money(d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) }} đ</strong></td>
+                                <td style="text-decoration: line-through; color: #999;">{{ money(d.price) }} VNĐ</td>
+                                <td><strong style="color: #d4af37;">{{ money(d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) }} VNĐ</strong></td>
                                 <td>{{ d.quantity }}</td>
                                 <td>{{ d.sizeName }}</td>
-                                <td><strong>{{ money((d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) * d.quantity) }} đ</strong></td>
+                                <td><strong>{{ money((d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) * d.quantity) }} VNĐ</strong></td>
                                 <td style="display:flex;gap:8px;flex-wrap:wrap">
                                     <button v-if="!isUnpaidPlaced" class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button>
                                     <template v-if="isUnpaidPlaced">
@@ -338,9 +349,7 @@ watch(() => route.query.orderId, initOrderByQuery);
                             <div v-else-if="reviewedSet.has(d.product?.id)" class="text-success small fst-italic mt-2 mb-2">
                                 ✓ Bạn đã đánh giá sản phẩm này.
                             </div>
-                            <div v-else class="text-muted small fst-italic mt-2 mb-2">
-                                Chỉ được đánh giá khi đơn hàng giao thành công.
-                            </div>
+                            
                         </td>
                     </tr>
                     </template>
@@ -351,9 +360,17 @@ watch(() => route.query.orderId, initOrderByQuery);
         </div>
         <div class="card" v-if="data" style="margin-top: 1rem;">
             <div class="card-body">
-                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 18px;">
-                    <span>Tổng đơn hàng:</span>
-                    <strong style="font-size: 24px; color: #1a1a1a;">{{ money(data.totalAmount) }} đ</strong>
+                <div class="order-money-row">
+                    <span>Tổng giá:</span>
+                    <strong>{{ money(orderTotalBeforeDiscount) }} VNĐ</strong>
+                </div>
+                <div class="order-money-row">
+                    <span>Tổng giảm:</span>
+                    <strong>{{ money(orderTotalDiscount) }} VNĐ</strong>
+                </div>
+                <div class="order-money-row">
+                    <span>Thành tiền:</span>
+                    <strong class="order-money-final">{{ money(orderTotalFinal) }} VNĐ</strong>
                 </div>
             </div>
         </div>
@@ -388,15 +405,15 @@ watch(() => route.query.orderId, initOrderByQuery);
                         <tr v-for="row in exchangeRows" :key="row.id">
                             <td>{{ row.name }}</td>
                             <td><button class="btn btn-outline-primary" type="button" @click="showProductImage(row.image)">Xem ảnh</button></td>
-                            <td>{{ money(row.price) }} đ</td>
-                            <td><strong style="color:#dc2626;">{{ money(finalPrice(row)) }} đ</strong></td>
+                            <td>{{ money(row.price) }} VNĐ</td>
+                            <td><strong style="color:#dc2626;">{{ money(finalPrice(row)) }} VNĐ</strong></td>
                             <td>
                                 <select v-model="ensureSelection(row).sizeId" style="min-width:90px;">
                                     <option v-for="s in row.sizes || []" :key="s.sizeId" :value="s.sizeId">{{ s.sizeName }} ({{ s.stock }})</option>
                                 </select>
                             </td>
                             <td><input type="number" min="1" v-model.number="ensureSelection(row).quantity" style="width:80px;"></td>
-                            <td>{{ money(lineTotal(row)) }} đ</td>
+                            <td>{{ money(lineTotal(row)) }} VNĐ</td>
                             <td><button class="btn btn-primary" type="button" @click="applyExchange(row)">Chọn</button></td>
                         </tr>
                         <tr v-if="!exchangeRows.length && !exchangeLoading"><td colspan="8">Không có sản phẩm phù hợp.</td></tr>
@@ -474,6 +491,22 @@ watch(() => route.query.orderId, initOrderByQuery);
     height:42px;
     min-width:92px;
     white-space:nowrap;
+}
+.order-money-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    font-size:18px;
+    line-height:1.8;
+}
+.order-money-row strong{
+    text-align:right;
+    margin-left:auto;
+}
+.order-money-final{
+    font-size:24px;
+    color:#1a1a1a;
 }
 @media (max-width:1200px){
     .exchange-modal-panel{

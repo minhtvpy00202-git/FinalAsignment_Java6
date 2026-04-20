@@ -7,6 +7,7 @@ import {useRouter} from "vue-router";
 const {orders, error, load, dateTime} = OrderListPage.setup();
 const router = useRouter();
 const actionMessage = ref("");
+const actionMessageType = ref("error");
 const repayingOrderId = ref(null);
 const refundingOrderId = ref(null);
 const activeTab = ref("pending");
@@ -65,17 +66,37 @@ const tabOrders = computed(() => {
         return rows.filter((item) => item?.status === "PENDING_PAYMENT");
     }
     if (activeTab.value === "placed") {
-        return rows.filter((item) => item?.status === "PLACED_UNPAID" || item?.status === "PLACED_PAID" || item?.status === "REFUND_REQUEST");
+        return rows.filter((item) => {
+            const id = Number(item?.id || 0);
+            if (id > 0 && refundedOrderIdSet.value.has(id)) {
+                return false;
+            }
+            return item?.status === "PLACED_UNPAID" || item?.status === "PLACED_PAID";
+        });
     }
     return rows.filter((item) => item?.status === "DELIVERED_SUCCESS");
 });
 const refundRows = computed(() => Array.isArray(refundRequests.value) ? refundRequests.value : []);
+const refundedOrderIdSet = computed(() => new Set(refundRows.value.map((item) => Number(item.orderId || 0)).filter((id) => id > 0)));
 const refundStatusLabel = (status) => {
     const key = String(status || "").toUpperCase();
-    if (key === "PENDING") return "pending";
-    if (key === "SUCCESS") return "success";
-    if (key === "DECLINED") return "decline";
-    return key || "pending";
+    if (key === "PENDING") return "Chờ xử lý";
+    if (key === "SUCCESS") return "Đã chấp nhận";
+    if (key === "DECLINED" || key === "DECLINE") return "Đã từ chối";
+    return key || "Chờ xử lý";
+};
+const refundStatusStyle = (status) => {
+    const key = String(status || "").toUpperCase();
+    if (key === "PENDING") {
+        return {background: "#fef3c7", color: "#92400e", border: "1px solid #f59e0b"};
+    }
+    if (key === "SUCCESS") {
+        return {background: "#dcfce7", color: "#166534", border: "1px solid #22c55e"};
+    }
+    if (key === "DECLINED") {
+        return {background: "#fee2e2", color: "#991b1b", border: "1px solid #ef4444"};
+    }
+    return {background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db"};
 };
 const retryPayment = async (order) => {
     if (!order?.id || repayingOrderId.value) {
@@ -104,8 +125,10 @@ const requestRefund = async (order) => {
         const list = await api.orderWorkflow.refundRequests();
         refundRequests.value = Array.isArray(list.data) ? list.data : [];
         actionMessage.value = "Đã gửi yêu cầu hoàn tiền.";
+        actionMessageType.value = "success";
     } catch (e) {
         actionMessage.value = e.message || "Không thể gửi yêu cầu hoàn tiền.";
+        actionMessageType.value = "error";
     } finally {
         refundingOrderId.value = null;
     }
@@ -131,7 +154,7 @@ const onTabChange = async (tab) => {
     <main class="container page-shell">
         <h3 class="page-title">Đơn hàng của tôi</h3>
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
-        <div v-if="actionMessage" class="status-message status-error">{{ actionMessage }}</div>
+        <div v-if="actionMessage" class="status-message" :class="actionMessageType === 'error' ? 'status-error' : 'status-success'">{{ actionMessage }}</div>
         <div class="order-tabs">
             <button class="order-tab-btn" :class="{active: activeTab === 'pending'}" type="button" @click="onTabChange('pending')">Đơn chờ thanh toán</button>
             <button class="order-tab-btn" :class="{active: activeTab === 'placed'}" type="button" @click="onTabChange('placed')">Đơn đã đặt</button>
@@ -163,7 +186,7 @@ const onTabChange = async (tab) => {
                         </button>
                         <template v-else-if="canOnlyDetail(o.status)">
                             <router-link class="btn btn-outline" :to="'/order/order-detail?id=' + o.id">Xem chi tiết</router-link>
-                            <button v-if="o.status === 'PLACED_PAID'" class="btn btn-outline" type="button" :disabled="refundingOrderId === o.id" @click="requestRefund(o)">
+                            <button v-if="o.status === 'PLACED_PAID' && !refundedOrderIdSet.has(Number(o.id || 0))" class="btn btn-outline" type="button" :disabled="refundingOrderId === o.id" @click="requestRefund(o)">
                                 {{ refundingOrderId === o.id ? "Đang gửi..." : "Yêu cầu hoàn tiền" }}
                             </button>
                         </template>
@@ -186,7 +209,7 @@ const onTabChange = async (tab) => {
                 <tr v-for="r in refundRows" :key="r.orderId + '_' + r.createdAt">
                     <td>{{ r.orderId }}</td>
                     <td>{{ dateTime(r.createdAt) }}</td>
-                    <td><span class="badge" style="color:black;">{{ refundStatusLabel(r.status) }}</span></td>
+                    <td><span class="badge refund-status-badge" :style="refundStatusStyle(r.status)">{{ refundStatusLabel(r.status) }}</span></td>
                     <td>{{ r.declineReason || "-" }}</td>
                 </tr>
                 <tr v-if="!refundRows.length">
@@ -234,5 +257,12 @@ const onTabChange = async (tab) => {
     overflow-x: auto;
     white-space: nowrap;
     padding-bottom: 4px;
+}
+.refund-status-badge{
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 10px;
 }
 </style>
