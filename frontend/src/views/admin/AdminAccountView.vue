@@ -1,20 +1,47 @@
 <script setup>
-import {computed, ref} from "vue";
+import {computed, onBeforeUnmount, ref} from "vue";
 import {AdminAccountPage} from "@/legacy/pages";
 import {useSession} from "@/composables/useSession";
 import AdminNav from "@/components/AdminNav.vue";
 import {api} from "@/api";
+import AppToast from "@/components/AppToast.vue";
 
 const {rows, roles, form, modalOpen, editing, msg, load, openCreate, closeModal, onPhotoChange, save} = AdminAccountPage.setup();
 const {state} = useSession();
 const currentUsername = computed(() => state.me?.username || "");
 const visibleRows = computed(() => (rows.value || []).filter((u) => u?.username !== currentUsername.value));
+const filterKeyword = ref("");
+const filterRole = ref("");
+const filterStatus = ref("");
+const filterType = ref("");
+const filteredRows = computed(() => {
+    const keyword = String(filterKeyword.value || "").trim().toLowerCase();
+    return visibleRows.value.filter((u) => {
+        const role = String(u?.roleId || "").toUpperCase();
+        const accountType = String(u?.accountType || "").toUpperCase();
+        const active = !!u?.activated;
+        if (filterRole.value && role !== String(filterRole.value).toUpperCase()) return false;
+        if (filterType.value && accountType !== String(filterType.value).toUpperCase()) return false;
+        if (filterStatus.value === "active" && !active) return false;
+        if (filterStatus.value === "locked" && active) return false;
+        if (!keyword) return true;
+        return [
+            u?.username,
+            u?.fullname,
+            u?.email,
+            u?.phone,
+            u?.address
+        ].some((value) => String(value || "").toLowerCase().includes(keyword));
+    });
+});
 const previewOpen = ref(false);
 const previewSrc = ref("");
 const previewName = ref("");
 const previewImageError = ref(false);
-const updateNoticeOpen = ref(false);
-const updateNoticeText = ref("");
+const showCreatePassword = ref(false);
+const toastOpen = ref(false);
+const toastText = ref("");
+let toastTimer = null;
 
 const roleOptions = computed(() => (roles.value || []).map((r) => r.id));
 const roleLabel = (roleId) => {
@@ -42,13 +69,15 @@ const previewInitial = computed(() => {
     const text = String(previewName.value || "").trim();
     return text ? text.slice(0, 1).toUpperCase() : "U";
 });
-const openUpdateNotice = (text) => {
-    updateNoticeText.value = text || "Cập nhật thành công.";
-    updateNoticeOpen.value = true;
-};
-const closeUpdateNotice = () => {
-    updateNoticeOpen.value = false;
-    updateNoticeText.value = "";
+const showToast = (text) => {
+    toastText.value = text || "Cập nhật thành công.";
+    toastOpen.value = true;
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+    toastTimer = setTimeout(() => {
+        toastOpen.value = false;
+    }, 2200);
 };
 const updateRole = async (u, event) => {
     const nextRole = String(event?.target?.value || "").trim();
@@ -56,7 +85,7 @@ const updateRole = async (u, event) => {
     try {
         await api.admin.accounts.updateRole(u.username, nextRole);
         await load();
-        openUpdateNotice(`Đã cập nhật vai trò của tài khoản ${u.username}.`);
+        showToast(`Đã cập nhật vai trò của tài khoản ${u.username}.`);
     } catch (e) {
         event.target.value = u.roleId || "USER";
     }
@@ -68,11 +97,22 @@ const updateActivation = async (u, event) => {
     try {
         await api.admin.accounts.updateActivation(u.username, activated);
         await load();
-        openUpdateNotice(`Đã cập nhật trạng thái tài khoản ${u.username}.`);
+        showToast(`Đã cập nhật trạng thái tài khoản ${u.username}.`);
     } catch (e) {
         event.target.value = u.activated ? "active" : "locked";
     }
 };
+const resetFilters = () => {
+    filterKeyword.value = "";
+    filterRole.value = "";
+    filterStatus.value = "";
+    filterType.value = "";
+};
+onBeforeUnmount(() => {
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+});
 </script>
 
 <template>
@@ -83,7 +123,6 @@ const updateActivation = async (u, event) => {
                 <AdminNav/>
             </div>
             <div class="admin-product-main">
-            <div class="status-message" v-if="msg">{{ msg }}</div>
             <div class="card admin-product-list">
                 <div class="admin-product-list-header">
                     <h4>Danh sách tài khoản</h4>
@@ -93,6 +132,24 @@ const updateActivation = async (u, event) => {
                         </svg>
                         Thêm tài khoản
                     </button>
+                </div>
+                <div class="table-actions" style="gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                    <input v-model.trim="filterKeyword" class="form-control" style="max-width:260px;" placeholder="Tìm username, tên, email...">
+                    <select v-model="filterRole" class="form-control" style="max-width:170px;">
+                        <option value="">Tất cả vai trò</option>
+                        <option v-for="r in roleOptions" :key="'f-role-' + r" :value="r">{{ roleLabel(r) }}</option>
+                    </select>
+                    <select v-model="filterType" class="form-control" style="max-width:180px;">
+                        <option value="">Tất cả loại TK</option>
+                        <option value="NORMAL">Bình thường</option>
+                        <option value="GOOGLE">Google</option>
+                    </select>
+                    <select v-model="filterStatus" class="form-control" style="max-width:170px;">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="active">Mở khoá</option>
+                        <option value="locked">Khoá</option>
+                    </select>
+                    <button class="btn btn-outline-primary" type="button" @click="resetFilters">Làm mới lọc</button>
                 </div>
                 <div style="overflow-x: auto; width: 100%;">
                     <table style="min-width: 1000px; width: 100%; white-space: nowrap;">
@@ -110,7 +167,7 @@ const updateActivation = async (u, event) => {
                         </tr>
                         </thead>
                         <tbody>
-                        <tr v-for="u in visibleRows" :key="u.username">
+                        <tr v-for="u in filteredRows" :key="u.username">
                             <td>
                                 <button class="btn btn-action-outline" type="button" @click="openPreview(u)">Xem ảnh</button>
                             </td>
@@ -132,6 +189,9 @@ const updateActivation = async (u, event) => {
                                 </select>
                             </td>
                         </tr>
+                        <tr v-if="!filteredRows.length">
+                            <td colspan="9" style="text-align:center;color:#6b7280;padding:18px;">Không có tài khoản phù hợp bộ lọc.</td>
+                        </tr>
                         </tbody>
                     </table>
                 </div>
@@ -152,7 +212,12 @@ const updateActivation = async (u, event) => {
                         </div>
                         <div class="form-group" v-if="!editing">
                             <label>Mật khẩu</label>
-                            <input type="password" v-model="form.password" class="form-control" placeholder="Nhập mật khẩu" required>
+                            <div class="password-field">
+                                <input :type="showCreatePassword ? 'text' : 'password'" v-model="form.password" class="form-control" placeholder="Nhập mật khẩu" required>
+                                <button class="password-toggle" type="button" @click="showCreatePassword = !showCreatePassword">
+                                    {{ showCreatePassword ? "Ẩn" : "Hiện" }}
+                                </button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Họ tên</label>
@@ -190,6 +255,7 @@ const updateActivation = async (u, event) => {
                             <div class="form-hint">Ảnh hiện tại: {{ form.photo || "Chưa có" }}</div>
                         </div>
                         <div class="admin-form-actions">
+                            <div v-if="msg" class="status-message status-error" style="margin-bottom:8px;">{{ msg }}</div>
                             <button class="btn btn-primary" type="submit">{{ editing ? "Cập nhật" : "Thêm" }}</button>
                             <button class="btn btn-outline-primary" type="button" @click="closeModal">Huỷ</button>
                         </div>
@@ -216,14 +282,27 @@ const updateActivation = async (u, event) => {
                 </div>
             </div>
         </div>
-        <div class="modal-backdrop" :class="{open: updateNoticeOpen}" v-if="updateNoticeOpen" @click.self="closeUpdateNotice">
-            <div class="admin-modal-panel" style="max-width: 420px; text-align: center;">
-                <h4 style="margin: 0 0 8px 0;">Thông báo</h4>
-                <p style="margin: 0; color: #374151;">{{ updateNoticeText }}</p>
-                <div style="margin-top: 14px;">
-                    <button class="btn btn-primary" type="button" @click="closeUpdateNotice">Đã hiểu</button>
-                </div>
-            </div>
-        </div>
+        <AppToast :open="toastOpen" :text="toastText" type="success" />
     </main>
 </template>
+
+<style scoped>
+.password-field{
+    position:relative;
+}
+.password-field .form-control{
+    padding-right:72px;
+}
+.password-toggle{
+    position:absolute;
+    right:8px;
+    top:50%;
+    transform:translateY(-50%);
+    border:0;
+    background:transparent;
+    color:#374151;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+}
+</style>

@@ -4,6 +4,10 @@ import {useRoute} from "vue-router";
 import {AdminOrderPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 import {api} from "@/api";
+import {formatDeliveredTime, formatExpectedDelivery} from "@/utils/order";
+import {orderStatusLabel} from "@/utils/orderStatus";
+import {formatVnd} from "@/utils/format";
+import AppToast from "@/components/AppToast.vue";
 
 const {rows, selected, status, payosCode, msg, paging, load, toPrevPage, toNextPage, detail: fetchDetail, updateStatus: persistStatus, cancelPayos, remove} = AdminOrderPage.setup();
 const route = useRoute();
@@ -14,8 +18,11 @@ const actionMessage = ref("");
 const actionModalOpen = ref(false);
 const confirmModalOpen = ref(false);
 const confirmMessage = ref("");
+const confirmAction = ref("");
+const confirmOrderId = ref(null);
 const declineModalOpen = ref(false);
 const declineReason = ref("");
+const declineError = ref("");
 const declineTargetOrderId = ref(null);
 const decliningRefund = ref(false);
 const simulatingDelivery = ref(false);
@@ -30,25 +37,13 @@ let destMarker = null;
 let routeLine = null;
 let simulateTimer = null;
 const routingWarning = ref("");
-const money = (value) => Number(value || 0).toLocaleString("vi-VN");
+const refundToastOpen = ref(false);
+const refundToastText = ref("");
+let refundToastTimer = null;
+const money = formatVnd;
 const detailLineTotal = (detail) => Number(detail?.price || 0) * Number(detail?.quantity || 0);
 const detailTotalAmount = computed(() => (selected.value?.details || []).reduce((sum, item) => sum + detailLineTotal(item), 0));
-const statusLabel = (value) => {
-    const labels = {
-        PENDING_PAYMENT: "Đang chờ thanh toán",
-        PLACED_UNPAID: "Đã đặt - Chưa TT",
-        PLACED_PAID: "Đã đặt - Đã TT",
-        SHIPPING_UNPAID: "Đang giao - Chưa TT",
-        SHIPPING_PAID: "Đang giao - Đã TT",
-        DELIVERED_SUCCESS: "Giao hàng thành công",
-        DELIVERY_FAILED: "Giao hàng thất bại",
-        REFUND_REQUEST: "Chờ xử lý hoàn tiền",
-        SUCCESS: "Đã chấp nhận hoàn tiền",
-        DECLINED: "Đã từ chối hoàn tiền",
-        DECLINE: "Đã từ chối hoàn tiền"
-    };
-    return labels[value] || value || "Không rõ";
-};
+const statusLabel = (value) => orderStatusLabel(value);
 const isDelivered = (value) => value === "DELIVERED_SUCCESS" || value === "DONE";
 const statusColor = (value) => isDelivered(value) ? "#64d441" : "#b62c54";
 const refundStatusStyle = (value) => {
@@ -63,34 +58,6 @@ const refundStatusStyle = (value) => {
         return {background: "#fee2e2", color: "#991b1b", border: "1px solid #ef4444"};
     }
     return null;
-};
-const formatExpectedDelivery = (order) => {
-    const date = String(order?.expectedDeliveryDate || "").trim();
-    const distanceM = Number(order?.deliveryDistanceM || 0);
-    if (!date) {
-        return "Chưa có";
-    }
-    const [year, month, day] = date.split("-");
-    const dateLabel = year && month && day ? `${day}/${month}/${year}` : date;
-    const km = distanceM > 0 ? `${(distanceM / 1000).toFixed(distanceM >= 10000 ? 0 : 1)} km` : "";
-    return km ? `${dateLabel} • ${km}` : dateLabel;
-};
-const formatDeliveredTime = (value) => {
-    const raw = String(value || "").trim();
-    if (!raw) {
-        return "Chưa có";
-    }
-    const dt = new Date(raw.replace(" ", "T"));
-    if (Number.isNaN(dt.getTime())) {
-        return raw;
-    }
-    const day = String(dt.getDate()).padStart(2, "0");
-    const month = String(dt.getMonth() + 1).padStart(2, "0");
-    const year = dt.getFullYear();
-    const hh = String(dt.getHours()).padStart(2, "0");
-    const mm = String(dt.getMinutes()).padStart(2, "0");
-    const ss = String(dt.getSeconds()).padStart(2, "0");
-    return `${hh}:${mm}:${ss} ${day}/${month}/${year}`;
 };
 const tabRows = computed(() => Array.isArray(rows.value) ? rows.value : []);
 const currentPaging = computed(() => paging?.[activeTab.value] || {page: 0, totalPages: 0, totalElements: 0});
@@ -143,6 +110,16 @@ const showActionModal = (message) => {
     actionMessage.value = message || "";
     actionModalOpen.value = true;
 };
+const showRefundToast = (text) => {
+    refundToastText.value = text || "Đã cập nhật yêu cầu hoàn tiền.";
+    refundToastOpen.value = true;
+    if (refundToastTimer) {
+        clearTimeout(refundToastTimer);
+    }
+    refundToastTimer = setTimeout(() => {
+        refundToastOpen.value = false;
+    }, 2300);
+};
 const closeActionModal = () => {
     actionModalOpen.value = false;
 };
@@ -150,9 +127,16 @@ const openConfirmModal = (message) => {
     confirmMessage.value = message || "Bạn có chắc chắn muốn thực hiện thao tác này?";
     confirmModalOpen.value = true;
 };
+const openConfirmAction = (action, orderId, message) => {
+    confirmAction.value = action || "";
+    confirmOrderId.value = orderId ?? null;
+    openConfirmModal(message);
+};
 const closeConfirmModal = () => {
     confirmModalOpen.value = false;
     confirmMessage.value = "";
+    confirmAction.value = "";
+    confirmOrderId.value = null;
 };
 const refreshActionUI = () => {
     if (currentOrderStatus.value === "DELIVERY_FAILED") {
@@ -387,7 +371,7 @@ const cancelOrder = async () => {
     if (!selected.value?.order?.id || !canCancelOrder.value) {
         return;
     }
-    openConfirmModal("Bạn có chắc chắn muốn huỷ và xoá đơn hàng này không?");
+    openConfirmAction("cancel_order", selected.value.order.id, "Bạn có chắc chắn muốn huỷ và xoá đơn hàng này không?");
 };
 const confirmCancelOrder = async () => {
     if (!selected.value?.order?.id || !canCancelOrder.value) {
@@ -407,21 +391,38 @@ const confirmCancelOrder = async () => {
 };
 const approveRefund = async (id) => {
     if (!id) return;
+    openConfirmAction("approve_refund", id, "Duyệt hoàn tiền sẽ xoá dữ liệu đơn hàng này. Bạn có chắc chắn?");
+};
+const confirmApproveRefund = async (id) => {
+    if (!id) return;
     updatingStatus.value = true;
     try {
         await api.admin.orders.approveRefund(id);
         await load(activeTab.value);
-        showActionModal("Đã duyệt hoàn tiền thành công.");
+        showRefundToast("Đã duyệt hoàn tiền thành công.");
     } catch (e) {
         showActionModal(e.message || "Không thể duyệt hoàn tiền.");
     } finally {
         updatingStatus.value = false;
     }
 };
+const handleConfirmAction = async () => {
+    const action = confirmAction.value;
+    const id = confirmOrderId.value;
+    closeConfirmModal();
+    if (action === "cancel_order") {
+        await confirmCancelOrder();
+        return;
+    }
+    if (action === "approve_refund") {
+        await confirmApproveRefund(id);
+    }
+};
 const openDeclineModal = (id) => {
     if (!id) return;
     declineTargetOrderId.value = id;
     declineReason.value = "";
+    declineError.value = "";
     declineModalOpen.value = true;
 };
 const closeDeclineModal = (force = false) => {
@@ -429,6 +430,7 @@ const closeDeclineModal = (force = false) => {
     declineModalOpen.value = false;
     declineTargetOrderId.value = null;
     declineReason.value = "";
+    declineError.value = "";
 };
 const submitDeclineRefund = async () => {
     const id = declineTargetOrderId.value;
@@ -438,16 +440,17 @@ const submitDeclineRefund = async () => {
         return;
     }
     if (!reason) {
-        showActionModal("Vui lòng nhập lý do từ chối.");
+        declineError.value = "Vui lòng nhập lý do từ chối.";
         return;
     }
+    declineError.value = "";
     decliningRefund.value = true;
     try {
         await api.admin.orders.declineRefund(id, reason);
         await load(activeTab.value);
         decliningRefund.value = false;
         closeDeclineModal(true);
-        showActionModal("Đã từ chối yêu cầu hoàn tiền.");
+        showRefundToast("Đã từ chối yêu cầu hoàn tiền.");
     } catch (e) {
         showActionModal(e.message || "Không thể từ chối hoàn tiền.");
     } finally {
@@ -471,6 +474,9 @@ watch(selected, async () => {
 });
 onUnmounted(() => {
     destroyMap();
+    if (refundToastTimer) {
+        clearTimeout(refundToastTimer);
+    }
 });
 onMounted(async () => {
     await load(activeTab.value);
@@ -619,7 +625,7 @@ onMounted(async () => {
                 </div>
                 <div class="status-message">{{ confirmMessage }}</div>
                 <div class="admin-form-actions">
-                    <button class="btn btn-action-solid" type="button" @click="confirmCancelOrder">Xác nhận</button>
+                    <button class="btn btn-action-solid" type="button" @click="handleConfirmAction">Xác nhận</button>
                     <button class="btn btn-outline-primary" type="button" @click="closeConfirmModal">Huỷ</button>
                 </div>
             </div>
@@ -651,6 +657,7 @@ onMounted(async () => {
                         placeholder="Nhập lý do để gửi cho khách hàng..."
                         :disabled="decliningRefund"
                     />
+                    <div v-if="declineError" class="status-message status-error" style="margin-top:8px;">{{ declineError }}</div>
                 </div>
                 <div class="admin-form-actions">
                     <button class="btn btn-action-solid" type="button" @click="submitDeclineRefund" :disabled="decliningRefund">
@@ -660,6 +667,7 @@ onMounted(async () => {
                 </div>
             </div>
         </div>
+        <AppToast :open="refundToastOpen" :text="refundToastText" type="success" />
     </main>
 </template>
 

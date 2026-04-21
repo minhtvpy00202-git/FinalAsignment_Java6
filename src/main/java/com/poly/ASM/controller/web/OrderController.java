@@ -80,6 +80,9 @@ public class OrderController {
     @Value("${app.debug.payos-response:false}")
     private boolean debugPayosResponse;
 
+    /**
+     * Dữ liệu đầu vào trang checkout (cart + phone + address tài khoản).
+     */
     @GetMapping("/checkout")
     public ResponseEntity<ApiResponse<?>> checkoutForm() {
         Account user = authService.getUser();
@@ -91,6 +94,11 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy dữ liệu checkout thành công", data));
     }
 
+    /**
+     * Tạo đơn hàng từ giỏ:
+     * - COD: tạo đơn và trả flow điều hướng detail
+     * - BANK: tạo đơn chờ thanh toán và khởi tạo link/qr payOS.
+     */
     @PostMapping("/checkout")
     @Transactional
     public ResponseEntity<ApiResponse<?>> checkout(@RequestParam(value = "address", required = false) String address,
@@ -220,6 +228,9 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Đặt hàng thành công", data));
     }
 
+    /**
+     * Trả dữ liệu trang chuyển khoản của đơn hàng.
+     */
     @GetMapping("/bank-transfer/{id}")
     public ResponseEntity<ApiResponse<?>> bankTransfer(@PathVariable("id") Long id, HttpServletRequest request) {
         Account user = authService.getUser();
@@ -310,6 +321,10 @@ public class OrderController {
         }
     }
 
+    /**
+     * Xác nhận đã chuyển khoản (user thao tác tay trên UI),
+     * hệ thống sẽ đối soát trạng thái với cổng thanh toán trước khi cập nhật đơn.
+     */
     @PostMapping("/bank-transfer/confirm")
     public ResponseEntity<ApiResponse<?>> confirmBankTransfer(@RequestParam("orderId") Long orderId) {
         Account user = authService.getUser();
@@ -333,6 +348,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Thanh toán chưa hoàn tất", Map.of("paid", false, "orderId", orderId)));
     }
 
+    /**
+     * Hủy thanh toán và đổi phương thức sang COD.
+     */
     @PostMapping("/bank-transfer/cancel/switch-cod")
     public ResponseEntity<ApiResponse<?>> switchToCodAfterCancel(@RequestParam("orderId") Long orderId) {
         Account user = authService.getUser();
@@ -351,6 +369,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Đã chuyển sang COD", Map.of("orderId", orderId)));
     }
 
+    /**
+     * Hủy link thanh toán payOS nhưng giữ đơn.
+     */
     @PostMapping("/bank-transfer/cancel/payos")
     public ResponseEntity<ApiResponse<?>> cancelPayosOnly(@RequestParam("orderId") Long orderId,
                                                           @RequestParam(value = "reason", required = false) String reason) {
@@ -374,6 +395,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Đã gửi yêu cầu hủy thanh toán lên PayOS", Map.of("orderId", orderId)));
     }
 
+    /**
+     * Hủy thanh toán và xóa đơn (kèm dữ liệu liên quan theo nghiệp vụ hiện tại).
+     */
     @PostMapping("/bank-transfer/cancel/delete")
     @Transactional
     public ResponseEntity<ApiResponse<?>> cancelAndDeleteOrder(@RequestParam("orderId") Long orderId) {
@@ -444,6 +468,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy trạng thái thanh toán thành công", response));
     }
 
+    /**
+     * Webhook payOS: điểm nhận callback trạng thái thanh toán từ cổng.
+     */
     @PostMapping("/payos/webhook")
     public ResponseEntity<ApiResponse<?>> payosWebhook(@RequestBody Webhook webhook) {
         try {
@@ -461,6 +488,9 @@ public class OrderController {
         }
     }
 
+    /**
+     * Danh sách đơn của người dùng hiện tại theo các tab trạng thái.
+     */
     @GetMapping("/list")
     public ResponseEntity<ApiResponse<?>> list() {
         Account user = authService.getUser();
@@ -485,6 +515,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng thành công", result));
     }
 
+    /**
+     * Chi tiết đơn theo id (có kiểm tra ownership).
+     */
     @GetMapping("/detail/{id}")
     public ResponseEntity<ApiResponse<?>> detail(@PathVariable("id") Long id) {
         Account user = authService.getUser();
@@ -508,6 +541,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết đơn hàng thành công", data));
     }
 
+    /**
+     * Cập nhật địa chỉ/sđt giao hàng trước khi đơn chuyển sang trạng thái không cho phép sửa.
+     */
     @PutMapping("/{orderId}/shipping")
     @Transactional
     public ResponseEntity<ApiResponse<?>> updateShipping(@PathVariable("orderId") Long orderId,
@@ -606,6 +642,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đã mua (đã giao) thành công", toOrderDetailData(delivered)));
     }
 
+    /**
+     * Xóa 1 dòng sản phẩm trong đơn đang cho phép chỉnh sửa.
+     */
     @DeleteMapping("/{orderId}/details/{detailId}")
     @Transactional
     public ResponseEntity<ApiResponse<?>> deleteOrderDetail(@PathVariable("orderId") Long orderId,
@@ -653,6 +692,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Đã xoá sản phẩm khỏi đơn hàng.", data));
     }
 
+    /**
+     * Yêu cầu đổi sản phẩm trong đơn.
+     */
     @PostMapping("/{orderId}/details/{detailId}/exchange")
     @Transactional
     public ResponseEntity<ApiResponse<?>> exchangeOrderDetail(@PathVariable("orderId") Long orderId,
@@ -788,6 +830,10 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đổi hàng thành công.", data));
     }
 
+    /**
+     * User gửi yêu cầu hoàn tiền.
+     * Chặn gửi lặp bằng kiểm tra tồn tại request theo order_id.
+     */
     @PostMapping("/{orderId}/refund-request")
     @Transactional
     public ResponseEntity<ApiResponse<?>> requestRefund(@PathVariable("orderId") Long orderId) {
@@ -822,6 +868,9 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Đã gửi yêu cầu hoàn tiền.", Map.of("orderId", orderId, "status", "PENDING")));
     }
 
+    /**
+     * Danh sách yêu cầu hoàn tiền của user hiện tại.
+     */
     @GetMapping("/refund-requests")
     public ResponseEntity<ApiResponse<?>> myRefundRequests() {
         Account user = authService.getUser();

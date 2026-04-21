@@ -1590,7 +1590,8 @@ textarea:focus {
     display: flex;
     gap: 32px;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start;
+    width: 100%;
 }
 
 .admin-product-menu {
@@ -1602,7 +1603,7 @@ textarea:focus {
 .admin-product-main {
     flex: 1;
     min-width: 0;
-    max-width: 1000px;
+    max-width: none;
     min-height: 400px;
 }
 
@@ -3141,7 +3142,9 @@ textarea:focus {
 .camera-stream {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    object-position: center top;
+    background: #000000;
 }
 
 .camera-stream-message {
@@ -3216,7 +3219,7 @@ textarea:focus {
 table tbody tr td .btn-action-outline,
 .admin-product-list table tbody tr td .btn-action-outline,
 .card table tbody tr td .btn-action-outline {
-    padding: 6px 12px !important;
+    padding: 4px 12px !important;
     font-size: 12px !important;
     background: #ffffff !important;
     border: 1px solid #d0d0d0 !important;
@@ -3225,6 +3228,11 @@ table tbody tr td .btn-action-outline,
     letter-spacing: normal !important;
     min-width: 50px !important;
     font-weight: 500 !important;
+    height: 34px !important;
+    line-height: 1.2 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 table tbody tr td .btn-action-outline:hover,
@@ -3240,7 +3248,7 @@ table tbody tr td .btn-action-outline:hover,
 table tbody tr td .btn-action-solid,
 .admin-product-list table tbody tr td .btn-action-solid,
 .card table tbody tr td .btn-action-solid {
-    padding: 6px 12px !important;
+    padding: 4px 12px !important;
     font-size: 12px !important;
     background: #1a1a1a !important;
     border: 1px solid #1a1a1a !important;
@@ -3249,6 +3257,11 @@ table tbody tr td .btn-action-solid,
     letter-spacing: normal !important;
     min-width: 50px !important;
     font-weight: 500 !important;
+    height: 34px !important;
+    line-height: 1.2 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 table tbody tr td .btn-action-solid:hover,

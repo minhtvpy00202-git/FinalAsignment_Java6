@@ -44,6 +44,14 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
     @Value("${app.frontend-base-url:http://localhost:5173}")
     private String frontendBaseUrl;
 
+    /**
+     * Luồng thành công OAuth2:
+     * - tạo/tìm account theo email Google
+     * - đánh dấu provider GOOGLE
+     * - đảm bảo role USER
+     * - đồng bộ giỏ hàng session
+     * - phát JWT cookie và redirect về frontend.
+     */
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws ServletException, IOException {
@@ -75,6 +83,9 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
         getRedirectStrategy().sendRedirect(request, response, normalizedBase + "/home/index");
     }
 
+    /**
+     * Khởi tạo account mới từ profile Google khi hệ thống chưa có email tương ứng.
+     */
     private Account createAccountFromGoogleProfile(OAuth2User oAuth2User, String email) {
         String displayName = toSafeString(oAuth2User.getAttribute("name"));
         String photoUrl = toSafeString(oAuth2User.getAttribute("picture"));
@@ -92,6 +103,9 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
         return accountService.create(account);
     }
 
+    /**
+     * Đảm bảo account luôn có authority USER.
+     */
     private void ensureUserRole(Account account) {
         Role userRole = roleService.findById("USER")
                 .orElseGet(() -> roleService.create(new Role("USER", "Khach hang", null)));

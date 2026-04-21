@@ -5,6 +5,8 @@ import {OrderDetailPage} from "@/legacy/pages";
 import {api, openSupportChat} from "@/api";
 import router from "@/router";
 import {isValidVnPhone10, normalizePhone} from "@/utils/phone";
+import {formatExpectedDelivery} from "@/utils/order";
+import {orderStatusLabel} from "@/utils/orderStatus";
 
 const {orderId, data, error, load, money} = OrderDetailPage.setup();
 const route = useRoute();
@@ -30,11 +32,7 @@ const exchangeError = ref("");
 const exchangeFilters = reactive({keyword: "", categoryId: "", minPrice: "", maxPrice: ""});
 const exchangeSelection = reactive({});
 const previewImage = ref("");
-const expectedDeliveryDate = computed(() => {
-    const base = new Date();
-    base.setDate(base.getDate() + 3);
-    return base.toLocaleDateString("vi-VN");
-});
+const expectedDeliveryDate = computed(() => formatExpectedDelivery(data.value?.order));
 const formatOrderDateTime = (value) => {
     if (!value) {
         return "";
@@ -54,13 +52,26 @@ const reviewKey = (detail) => String(detail.product?.id || detail.productId || "
 const ensureReviewForm = (detail) => {
     const key = reviewKey(detail);
     if (!reviewForms[key]) {
-        reviewForms[key] = {starRating: 5, reviewContent: "", images: []};
+        reviewForms[key] = {starRating: 0, hoverRating: 0, reviewContent: "", images: []};
     }
     return reviewForms[key];
+};
+const reviewDisplayRating = (detail) => {
+    // Hover ưu tiên hơn điểm đã chọn để tạo hiệu ứng preview số sao.
+    const form = ensureReviewForm(detail);
+    return Number(form.hoverRating || form.starRating || 0);
 };
 const setReviewStar = (detail, star) => {
     const form = ensureReviewForm(detail);
     form.starRating = star;
+};
+const setReviewHover = (detail, star) => {
+    const form = ensureReviewForm(detail);
+    form.hoverRating = star;
+};
+const clearReviewHover = (detail) => {
+    const form = ensureReviewForm(detail);
+    form.hoverRating = 0;
 };
 const onReviewImagesChange = (detail, event) => {
     const form = ensureReviewForm(detail);
@@ -73,11 +84,15 @@ const submitReview = async (detail) => {
         return;
     }
     const form = ensureReviewForm(detail);
+    if (Number(form.starRating || 0) <= 0) {
+        reviewMessage.value = "Vui lòng chọn số sao đánh giá.";
+        return;
+    }
     try {
         const response = await api.reviews.createFromOrder({
             orderId: data.value.order.id,
             productId,
-            starRating: Number(form.starRating || 5),
+            starRating: Number(form.starRating || 0),
             reviewContent: form.reviewContent || "",
             images: form.images || []
         });
@@ -189,6 +204,13 @@ const applyExchange = async (row) => {
 };
 const removeOrderDetail = async (detail) => {
     if (!data.value?.order?.id) return;
+    // Confirm trước khi xoá để tránh thao tác nhầm.
+    const accepted = typeof window !== "undefined"
+        ? window.confirm("Bạn có chắc chắn muốn xoá sản phẩm khỏi đơn hàng?")
+        : true;
+    if (!accepted) {
+        return;
+    }
     try {
         const res = await api.orderWorkflow.removeDetail(data.value.order.id, detail.id);
         if (res.data?.orderDeleted) {
@@ -246,23 +268,7 @@ const contactSeller = (detail) => {
         thumbnailUrl: detail?.product?.image ? `/images/${detail.product.image}` : ""
     });
 };
-const statusLabel = (status) => {
-    const map = {
-        PLACED_PAID: "Đã đặt - đã TT",
-        PLACED_UNPAID: "Đã đặt - chưa TT",
-        NEW: "Đã đặt - chưa TT",
-        PLACED: "Đã đặt - chưa TT",
-        SHIPPING_PAID: "Đang giao - đã TT",
-        SHIPPING_UNPAID: "Đang giao - chưa TT",
-        SHIPPING: "Đang giao - chưa TT",
-        DONE: "Giao thành công",
-        DELIVERED_SUCCESS: "Giao thành công",
-        CANCEL: "Giao thất bại",
-        DELIVERY_FAILED: "Giao thất bại"
-        ,REFUND_REQUEST: "Yêu cầu hoàn tiền"
-    };
-    return map[status] || status;
-};
+const statusLabel = (status) => orderStatusLabel(status);
 const initOrderByQuery = async () => {
     const queryId = Number(route.query.id || route.query.orderId || "");
     if (!Number.isFinite(queryId) || queryId <= 0) {
@@ -315,7 +321,7 @@ watch(() => route.query.orderId, initOrderByQuery);
                                     <button v-if="!isUnpaidPlaced" class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button>
                                     <template v-if="isUnpaidPlaced">
                                         <button class="btn btn-outline" type="button" @click="openExchange(d)">Đổi hàng</button>
-                                        <button class="btn btn-action-solid" type="button" @click="removeOrderDetail(d)">Xoá</button>
+                                        <button class="btn btn-outline" type="button" @click="removeOrderDetail(d)">Xoá</button>
                                     </template>
                                     <button class="btn btn-outline" type="button" @click="contactSeller(d)">Liên hệ người bán</button>
                                 </td>
@@ -326,12 +332,13 @@ watch(() => route.query.orderId, initOrderByQuery);
                                 <form @submit.prevent="submitReview(d)">
                                     <h5 class="mb-3">Đánh giá sản phẩm</h5>
                                     <div class="form-group mb-3">
-                                        <div class="star-rating-input">
+                                        <div class="star-rating-input" @mouseleave="clearReviewHover(d)">
                                             <span 
                                                 v-for="star in 5" 
                                                 :key="star" 
                                                 class="star-icon" 
-                                                :class="{ active: star <= ensureReviewForm(d).starRating }"
+                                                :class="{ active: star <= reviewDisplayRating(d) }"
+                                                @mouseenter="setReviewHover(d, star)"
                                                 @click="setReviewStar(d, star)"
                                             >★</span>
                                         </div>

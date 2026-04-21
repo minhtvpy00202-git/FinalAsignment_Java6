@@ -5,6 +5,7 @@ import {api} from "@/api";
 import {useSession} from "@/composables/useSession";
 import {useChatSocket} from "@/composables/useChatSocket";
 import AdminNav from "@/components/AdminNav.vue";
+import {formatVnd} from "@/utils/format";
 
 const {state: session, isAuthenticated, isAdmin, refreshSession} = useSession();
 const {connect, subscribe, send, status} = useChatSocket();
@@ -60,7 +61,7 @@ const formatMoney = (value) => {
     if (!Number.isFinite(num)) {
         return "0 VND";
     }
-    return `${num.toLocaleString("vi-VN")} VND`;
+    return `${formatVnd(num)} VND`;
 };
 
 const beep = () => {
@@ -305,10 +306,30 @@ watch(() => [route.query.customerId, route.query.productId], async () => {
 </script>
 
 <template>
-    <main class="container admin-shell">
-        <aside class="admin-side">
-            <AdminNav/>
-            <section class="contact-panel">
+    <main class="container admin-product-page">
+        <h3 class="page-title">Chat hỗ trợ khách hàng</h3>
+        <div class="admin-product-shell">
+            <div class="admin-product-menu">
+                <AdminNav/>
+            </div>
+            <div class="admin-product-main">
+                <div class="admin-chat-head">
+                    <h1 class="admin-chat-title">Khung chat hỗ trợ</h1>
+                    <div class="admin-chat-meta">
+                        <span class="pill">{{ session.me?.fullname || session.me?.username || "Admin" }}</span>
+                        <span class="pill">WS: {{ status }}</span>
+                        <span class="pill" v-if="unreadTotal > 0">Mới: {{ unreadTotal }}</span>
+                    </div>
+                </div>
+
+                <div v-if="alertText" class="incoming-alert">
+                    <span>{{ alertText }}</span>
+                    <button class="alert-btn" type="button" @click="openFirstUnread">Mở chat</button>
+                </div>
+
+                <section class="admin-chat-shell">
+                    <aside class="admin-chat-left">
+                        <section class="contact-panel">
                 <div class="left-title">Chat hỗ trợ khách hàng</div>
                 <div v-if="loadingConversations" class="left-empty">Đang tải danh sách…</div>
                 <div v-else-if="conversationError" class="left-empty left-error">{{ conversationError }}</div>
@@ -333,24 +354,9 @@ watch(() => [route.query.customerId, route.query.productId], async () => {
                     </div>
                     <div v-if="c.unread > 0" class="unread-dot">{{ c.unread }}</div>
                 </button>
-            </section>
-        </aside>
-        <section class="admin-main">
-            <div class="admin-chat-head">
-                <h1 class="admin-chat-title">Khung chat hỗ trợ</h1>
-                <div class="admin-chat-meta">
-                    <span class="pill">{{ session.me?.fullname || session.me?.username || "Admin" }}</span>
-                    <span class="pill">WS: {{ status }}</span>
-                    <span class="pill" v-if="unreadTotal > 0">Mới: {{ unreadTotal }}</span>
-                </div>
-            </div>
-
-            <div v-if="alertText" class="incoming-alert">
-                <span>{{ alertText }}</span>
-                <button class="alert-btn" type="button" @click="openFirstUnread">Mở chat</button>
-            </div>
-
-            <section class="admin-chat-right">
+                        </section>
+                    </aside>
+                    <section class="admin-chat-right">
                 <div v-if="!activeConversation" class="right-empty">Chọn một người liên hệ ở cột trái để bắt đầu.</div>
                 <template v-else>
                     <div class="right-head">
@@ -406,22 +412,23 @@ watch(() => [route.query.customerId, route.query.productId], async () => {
                         </div>
                     </div>
                 </template>
-            </section>
-        </section>
+                    </section>
+                </section>
+            </div>
+        </div>
     </main>
 </template>
 
 <style scoped>
-.admin-shell{display:grid;grid-template-columns:340px 1fr;gap:20px;padding:20px 0}
-.admin-side{align-self:start;display:flex;flex-direction:column;gap:12px}
-.admin-main{min-width:0}
+.admin-chat-shell{display:grid;grid-template-columns:340px 1fr;gap:20px}
+.admin-chat-left{align-self:start;display:flex;flex-direction:column;gap:12px}
 .admin-chat-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
 .admin-chat-title{font-size:22px;font-weight:800;margin:0}
 .admin-chat-meta{display:flex;gap:8px;align-items:center}
 .pill{border:1px solid #e5e7eb;background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;color:#111827}
 .incoming-alert{margin-bottom:12px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .alert-btn{border:1px solid #1d4ed8;background:#2563eb;color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:700}
-.contact-panel{border:1px solid #e5e7eb;border-radius:12px;background:#fff;overflow:auto;display:flex;flex-direction:column;max-height:680px}
+.contact-panel{border:1px solid #e5e7eb;border-radius:12px;background:#fff;overflow:auto;display:flex;flex-direction:column;height:680px}
 .left-title{padding:14px 14px 12px;font-size:18px;font-weight:800;border-bottom:1px solid #e5e7eb}
 .left-empty{padding:14px;color:#6b7280;font-size:13px}
 .left-error{color:#991b1b}
@@ -477,5 +484,5 @@ watch(() => [route.query.customerId, route.query.productId], async () => {
 .composer-actions{margin-top:8px;display:flex;justify-content:flex-end}
 .btn{border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:800;cursor:pointer}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-@media (max-width:1200px){.admin-shell{grid-template-columns:1fr}.contact-panel{max-height:none}}
+@media (max-width:1200px){.admin-chat-shell{grid-template-columns:1fr}.contact-panel{height:auto;max-height:none}}
 </style>

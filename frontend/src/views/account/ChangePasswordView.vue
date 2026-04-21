@@ -1,10 +1,36 @@
 <script setup>
 import {ChangePasswordPage} from "@/legacy/pages";
-import {ref} from "vue";
+import {computed, onBeforeUnmount, ref, watch} from "vue";
+import AppToast from "@/components/AppToast.vue";
 
 const {form, message, submit} = ChangePasswordPage.setup();
 const submitting = ref(false);
+const toastOpen = ref(false);
+const toastText = ref("");
+const showCurrentPassword = ref(false);
+const showNewPassword = ref(false);
+// Chỉ giữ lại lỗi để hiển thị inline ngay trên form, tránh popup làm ngắt luồng nhập liệu.
+const errorText = computed(() => {
+    const text = String(message.value || "").trim();
+    if (!text) return "";
+    return text.toLowerCase().includes("thành công") ? "" : text;
+});
+let toastTimer = null;
+// Khi backend trả thông báo thành công thì hiển thị toast ngắn, không chặn người dùng.
+watch(message, (value) => {
+    const text = String(value || "").trim();
+    if (!text || !text.toLowerCase().includes("thành công")) return;
+    toastText.value = text;
+    toastOpen.value = true;
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+    toastTimer = setTimeout(() => {
+        toastOpen.value = false;
+    }, 2300);
+});
 const submitForm = async () => {
+    // Submit luôn đi qua hàm `submit()` của page logic để thống nhất xử lý với API.
     submitting.value = true;
     try {
         await submit();
@@ -12,6 +38,11 @@ const submitForm = async () => {
         submitting.value = false;
     }
 };
+onBeforeUnmount(() => {
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+});
 </script>
 
 <template>
@@ -22,15 +53,25 @@ const submitForm = async () => {
                 <p class="change-password-note">Mật khẩu mới tối thiểu 8 ký tự và bao gồm CHỮ HOA, chữ THƯỜNG, SỐ và KÝ TỰ ĐẶC BIỆT.</p>
             </div>
             <div class="change-password-card">
-                <div v-if="message" class="status-message" :class="message.includes('thành công') ? 'status-success' : 'status-error'">{{ message }}</div>
+                <div v-if="errorText" class="status-message status-error">{{ errorText }}</div>
                 <form @submit.prevent="submitForm">
                     <div class="form-group">
                         <label>Mật khẩu hiện tại</label>
-                        <input type="password" v-model="form.currentPassword" required>
+                        <div class="password-field">
+                            <input :type="showCurrentPassword ? 'text' : 'password'" v-model="form.currentPassword" required>
+                            <button class="password-toggle" type="button" @click="showCurrentPassword = !showCurrentPassword">
+                                {{ showCurrentPassword ? "Ẩn" : "Hiện" }}
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Mật khẩu mới</label>
-                        <input type="password" v-model="form.newPassword" required>
+                        <div class="password-field">
+                            <input :type="showNewPassword ? 'text' : 'password'" v-model="form.newPassword" required>
+                            <button class="password-toggle" type="button" @click="showNewPassword = !showNewPassword">
+                                {{ showNewPassword ? "Ẩn" : "Hiện" }}
+                            </button>
+                        </div>
                     </div>
                     <button class="btn btn-primary change-password-btn" type="submit" :disabled="submitting">
                         {{ submitting ? "Đang cập nhật..." : "Đổi mật khẩu" }}
@@ -38,6 +79,7 @@ const submitForm = async () => {
                 </form>
             </div>
         </div>
+        <AppToast :open="toastOpen" :text="toastText" type="success" />
     </main>
 </template>
 
@@ -89,6 +131,24 @@ const submitForm = async () => {
     border: 1px solid #dbe1ea;
     padding: 0 14px;
     font-size: 15px;
+}
+.password-field{
+    position:relative;
+}
+.change-password-card .password-field :deep(input){
+    padding-right:72px;
+}
+.password-toggle{
+    position:absolute;
+    right:8px;
+    top:50%;
+    transform:translateY(-50%);
+    border:0;
+    background:transparent;
+    color:#374151;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
 }
 
 .change-password-card :deep(input:focus) {

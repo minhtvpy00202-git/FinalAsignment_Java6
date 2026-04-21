@@ -1,6 +1,7 @@
 <script setup>
 import {EditProfilePage} from "@/legacy/pages";
-import {computed} from "vue";
+import {computed, onBeforeUnmount, ref, watch} from "vue";
+import AppToast from "@/components/AppToast.vue";
 
 const {form, message, save, onPhotoChange, isGoogleAccount} = EditProfilePage.setup();
 const backendUrl = import.meta.env.VITE_BACKEND_URL || "";
@@ -22,6 +23,27 @@ const avatarUrl = computed(() => {
     return `/images/${encodeURIComponent(raw)}`;
 });
 const photoFileName = computed(() => form.photoFile?.name || "");
+const toastOpen = ref(false);
+const toastText = ref("");
+let toastTimer = null;
+const isErrorMessage = computed(() => !!message.value && !String(message.value).toLowerCase().includes("thành công"));
+watch(message, (value) => {
+    const text = String(value || "").trim();
+    if (!text || isErrorMessage.value) return;
+    toastText.value = text;
+    toastOpen.value = true;
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+    toastTimer = setTimeout(() => {
+        toastOpen.value = false;
+    }, 2300);
+});
+onBeforeUnmount(() => {
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+});
 </script>
 
 <template>
@@ -30,7 +52,7 @@ const photoFileName = computed(() => form.photoFile?.name || "");
             <h3 class="page-title">Quản Lý Tài Khoản</h3>
             <p class="profile-subtitle">Cập nhật thông tin cá nhân, ảnh đại diện và bảo mật tài khoản của bạn.</p>
         </div>
-        <div v-if="message" class="status-message">{{ message }}</div>
+        <div v-if="isErrorMessage" class="status-message status-error">{{ message }}</div>
         <form class="profile-shell" @submit.prevent="save">
             <div class="profile-avatar-card">
                 <img :src="avatarUrl" alt="avatar" class="profile-avatar-image">
@@ -68,6 +90,7 @@ const photoFileName = computed(() => form.photoFile?.name || "");
                 </div>
             </div>
         </form>
+        <AppToast :open="toastOpen" :text="toastText" type="success" />
     </main>
 </template>
 

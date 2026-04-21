@@ -3,6 +3,7 @@ import {computed, nextTick, onMounted, reactive, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {api} from "@/api";
 import AdminNav from "@/components/AdminNav.vue";
+import {formatVnd} from "@/utils/format";
 
 const route = useRoute();
 const router = useRouter();
@@ -32,7 +33,7 @@ const periodParams = reactive({
 });
 const months = Array.from({length: 12}, (_, i) => i + 1);
 const quarters = [1, 2, 3, 4];
-const money = (value) => Number(value || 0).toLocaleString("vi-VN");
+const money = formatVnd;
 const viewMode = computed(() => route.meta.revenueView || "summary");
 const isSummaryMode = computed(() => viewMode.value === "summary");
 const isDayMode = computed(() => viewMode.value === "day");
@@ -61,6 +62,12 @@ const categoryBreakdown = computed(() => {
 const pieTotal = computed(() => categoryBreakdown.value.reduce((sum, item) => sum + item.amount, 0));
 const hoveredSliceName = ref("");
 const pieTooltip = reactive({
+    visible: false,
+    text: "",
+    x: 0,
+    y: 0
+});
+const lineTooltip = reactive({
     visible: false,
     text: "",
     x: 0,
@@ -421,6 +428,20 @@ function hidePieTooltip() {
     pieTooltip.visible = false;
     pieTooltip.text = "";
 }
+function showLineTooltip(point, event) {
+    lineTooltip.text = money(point?.value || 0);
+    lineTooltip.visible = true;
+    moveLineTooltip(event);
+}
+function moveLineTooltip(event) {
+    const gap = 14;
+    lineTooltip.x = Number(event.clientX || 0) + gap;
+    lineTooltip.y = Number(event.clientY || 0) + gap;
+}
+function hideLineTooltip() {
+    lineTooltip.visible = false;
+    lineTooltip.text = "";
+}
 </script>
 
 <template>
@@ -572,7 +593,7 @@ function hidePieTooltip() {
                             <text
                                 v-for="(tick, index) in lineChart.yTicks"
                                 :key="'ylabel-' + index"
-                                x="48"
+                                x="44"
                                 :y="tick.y + 4"
                                 text-anchor="end"
                                 class="revenue-line-axis-value"
@@ -580,13 +601,30 @@ function hidePieTooltip() {
                                 {{ money(tick.value) }}
                             </text>
                             <polyline :points="lineChart.points" fill="none" stroke="#2563eb" stroke-width="3"></polyline>
-                            <circle v-for="(point, index) in lineChart.circles" :key="`pt-${index}`" :cx="point.x" :cy="point.y" r="4" fill="#1d4ed8"></circle>
+                            <circle
+                                v-for="(point, index) in lineChart.circles"
+                                :key="`pt-${index}`"
+                                :cx="point.x"
+                                :cy="point.y"
+                                r="5"
+                                fill="#1d4ed8"
+                                @mouseenter="showLineTooltip(point, $event)"
+                                @mousemove="moveLineTooltip($event)"
+                                @mouseleave="hideLineTooltip"
+                            ></circle>
                             <text v-for="(item, index) in lineChart.labels" :key="`lb-${index}`" :x="item.x" :y="item.y" text-anchor="middle" class="revenue-line-label">
                                 {{ item.text }}
                             </text>
                             <text x="396" y="274" text-anchor="middle" class="revenue-line-axis-title">{{ lineChart.xAxisTitle }}</text>
-                            <text x="16" y="136" text-anchor="middle" class="revenue-line-axis-title" transform="rotate(-90 16 136)">Doanh thu (VND)</text>
+                            <text x="56" y="16" text-anchor="start" class="revenue-line-axis-title">D. Thu</text>
                         </svg>
+                        <div
+                            v-if="lineTooltip.visible"
+                            class="revenue-pie-tooltip"
+                            :style="{ left: `${lineTooltip.x}px`, top: `${lineTooltip.y}px` }"
+                        >
+                            {{ lineTooltip.text }}
+                        </div>
                     </div>
                     <div v-else class="status-message">Chưa có dữ liệu chuỗi thời gian.</div>
                 </div>

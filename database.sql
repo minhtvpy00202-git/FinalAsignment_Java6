@@ -472,3 +472,8 @@ GO
 CREATE INDEX IX_chat_messages_customer_id ON dbo.chat_messages(customer_id);
 CREATE INDEX IX_chat_messages_product_id ON dbo.chat_messages(product_id);
 GO
+
+
+BACKUP DATABASE ASM_Java5
+TO DISK = '/var/opt/mssql/backup/ASM_Java5.bak'
+WITH FORMAT;

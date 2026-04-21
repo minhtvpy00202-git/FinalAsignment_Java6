@@ -1,3 +1,4 @@
+// Build query string từ object, tự bỏ key rỗng để URL luôn sạch.
 const toQuery = (params = {}) => {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -82,6 +83,7 @@ export const redirectToLoginByFeature = async (feature, redirectPath = "") => {
     return true;
 };
 
+// Hàm request dùng chung toàn frontend: auto include cookie, parse JSON và chuẩn hóa lỗi.
 const request = async (path, options = {}) => {
     const response = await fetch(path, {
         credentials: "include",
@@ -110,7 +112,9 @@ const request = async (path, options = {}) => {
     return payload;
 };
 
+// Helper gửi JSON body.
 const json = (path, method, body) => request(path, {method, body: JSON.stringify(body)});
+// Helper gửi FormData (file upload / form-encoded style).
 const form = (path, method, data) => {
     const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => {
@@ -123,6 +127,7 @@ const form = (path, method, data) => {
 };
 
 export const api = {
+    // Nhóm API theo module màn hình để dễ trace từ UI -> endpoint backend.
     auth: {
         login: (username, password) => json("/api/auth/login", "POST", {username, password}),
         me: () => request("/api/auth/me"),

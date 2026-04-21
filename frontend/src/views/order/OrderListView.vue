@@ -3,6 +3,8 @@ import {OrderListPage} from "@/legacy/pages";
 import {api} from "@/api";
 import {computed, ref} from "vue";
 import {useRouter} from "vue-router";
+import {formatDeliveredTime, formatExpectedDelivery} from "@/utils/order";
+import {orderStatusLabel, refundStatusLabel} from "@/utils/orderStatus";
 
 const {orders, error, load, dateTime} = OrderListPage.setup();
 const router = useRouter();
@@ -12,54 +14,9 @@ const repayingOrderId = ref(null);
 const refundingOrderId = ref(null);
 const activeTab = ref("pending");
 const refundRequests = ref([]);
-const statusLabel = (status) => {
-    const map = {
-        PENDING_PAYMENT: "Đang chờ thanh toán",
-        PLACED_PAID: "Đã đặt - đã TT",
-        PLACED_UNPAID: "Đã đặt - chưa TT",
-        NEW: "Đã đặt - chưa TT",
-        PLACED: "Đã đặt - chưa TT",
-        SHIPPING_PAID: "Đang giao - đã TT",
-        SHIPPING_UNPAID: "Đang giao - chưa TT",
-        SHIPPING: "Đang giao - chưa TT",
-        DONE: "Giao thành công",
-        DELIVERED_SUCCESS: "Giao thành công",
-        CANCEL: "Giao thất bại",
-        DELIVERY_FAILED: "Giao thất bại",
-        REFUND_REQUEST: "Đang yêu cầu hoàn tiền"
-    };
-    return map[status] || status;
-};
+const statusLabel = (status) => orderStatusLabel(status);
 const canOnlyDetail = (status) => status === "PLACED_UNPAID" || status === "PLACED_PAID" || status === "REFUND_REQUEST";
 const isPendingPayment = (status) => status === "PENDING_PAYMENT";
-const formatExpectedDelivery = (order) => {
-    const date = String(order?.expectedDeliveryDate || "").trim();
-    const distanceM = Number(order?.deliveryDistanceM || 0);
-    if (!date) {
-        return "Chưa có";
-    }
-    const [year, month, day] = date.split("-");
-    const dateLabel = year && month && day ? `${day}/${month}/${year}` : date;
-    const km = distanceM > 0 ? `${(distanceM / 1000).toFixed(distanceM >= 10000 ? 0 : 1)} km` : "";
-    return km ? `${dateLabel} • ${km}` : dateLabel;
-};
-const formatDeliveredTime = (value) => {
-    const raw = String(value || "").trim();
-    if (!raw) {
-        return "Chưa có";
-    }
-    const dt = new Date(raw.replace(" ", "T"));
-    if (Number.isNaN(dt.getTime())) {
-        return raw;
-    }
-    const day = String(dt.getDate()).padStart(2, "0");
-    const month = String(dt.getMonth() + 1).padStart(2, "0");
-    const year = dt.getFullYear();
-    const hh = String(dt.getHours()).padStart(2, "0");
-    const mm = String(dt.getMinutes()).padStart(2, "0");
-    const ss = String(dt.getSeconds()).padStart(2, "0");
-    return `${hh}:${mm}:${ss} ${day}/${month}/${year}`;
-};
 const tabOrders = computed(() => {
     const rows = Array.isArray(orders.value) ? orders.value : [];
     if (activeTab.value === "pending") {
@@ -78,13 +35,6 @@ const tabOrders = computed(() => {
 });
 const refundRows = computed(() => Array.isArray(refundRequests.value) ? refundRequests.value : []);
 const refundedOrderIdSet = computed(() => new Set(refundRows.value.map((item) => Number(item.orderId || 0)).filter((id) => id > 0)));
-const refundStatusLabel = (status) => {
-    const key = String(status || "").toUpperCase();
-    if (key === "PENDING") return "Chờ xử lý";
-    if (key === "SUCCESS") return "Đã chấp nhận";
-    if (key === "DECLINED" || key === "DECLINE") return "Đã từ chối";
-    return key || "Chờ xử lý";
-};
 const refundStatusStyle = (status) => {
     const key = String(status || "").toUpperCase();
     if (key === "PENDING") {

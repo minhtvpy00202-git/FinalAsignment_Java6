@@ -47,8 +47,8 @@ const placing = ref(false);
 const noticeOpen = ref(false);
 const noticeText = ref("");
 const noticeType = ref("error");
-const lastNoticeText = ref("");
 const pendingRedirect = ref("");
+const submitErrorText = ref("");
 const addressSuggestions = ref([]);
 let goong = null;
 let goongMap = null;
@@ -66,6 +66,7 @@ let applyingFullAddress = false;
 const lastGeoWarning = ref("");
 const selectedProvinceName = () => provinces.value.find((item) => item.code === selectedProvinceCode.value)?.name || "";
 const selectedWardName = () => wards.value.find((item) => item.code === selectedWardCode.value)?.name || "";
+// Khi vào checkout, tự đổ địa chỉ từ hồ sơ tài khoản để giảm thao tác nhập tay.
 const tryFillAddressDetailFromAccount = () => {
     const current = String(form.addressDetail || "").trim();
     if (current) {
@@ -85,7 +86,6 @@ const openNotice = (text, type = "error") => {
     noticeText.value = message;
     noticeType.value = type;
     noticeOpen.value = true;
-    lastNoticeText.value = message;
 };
 const closeNotice = () => {
     noticeOpen.value = false;
@@ -95,14 +95,8 @@ const closeNotice = () => {
         router.push(target);
     }
 };
-const shouldShowErrorNotice = (text) => {
-    const message = String(text || "").trim().toLowerCase();
-    if (!message) return false;
-    if (message.includes("không tìm thấy chính xác số nhà")) return false;
-    if (message.includes("đã chọn vị trí gần nhất trên tuyến")) return false;
-    return true;
-};
 const syncAddress = () => {
+    // Ghép địa chỉ đầy đủ theo thứ tự: chi tiết -> phường/xã -> tỉnh/thành.
     const parts = [
         (form.addressDetail || "").trim(),
         selectedWardName(),
@@ -173,6 +167,7 @@ const scheduleGeocode = () => {
     }
     geocodeTimer = setTimeout(geocodeAddress, 500);
 };
+// Gợi ý autocomplete được trigger theo debounce để tránh spam request khi user đang gõ.
 const scheduleAutocomplete = () => {
     if (autocompleteTimer) {
         clearTimeout(autocompleteTimer);
@@ -560,6 +555,7 @@ const tryResolveFullAddressInput = async () => {
     if (applyingFullAddress) {
         return;
     }
+    // Hỗ trợ nhập full 1 dòng địa chỉ (vd: "613 Nguyễn Thái Học, Quy Nhơn Nam, Gia Lai").
     const raw = String(form.addressDetail || "").trim();
     if (!raw || !raw.includes(",") || !provinces.value.length) {
         return;
@@ -957,13 +953,12 @@ watch(() => checkout.value?.address, () => {
     tryFillAddressDetailFromAccount();
 }, {immediate: true});
 const submitCheckout = async () => {
+    submitErrorText.value = "";
     const showSubmitError = (message) => {
         const text = String(message || "").trim();
         if (!text) return;
-        geocodeMessage.value = text;
-        if (shouldShowErrorNotice(text)) {
-            openNotice(text, "error");
-        }
+        // Theo UX mới: lỗi validate chỉ hiển thị text đỏ gần nút đặt hàng.
+        submitErrorText.value = text;
     };
     if (!form.provinceCode || !form.wardCode) {
         showSubmitError("Vui lòng chọn đầy đủ tỉnh/thành và phường/xã.");
@@ -999,6 +994,7 @@ const submitCheckout = async () => {
         return;
     }
     if (nextAction === "BANK_TRANSFER" || (form.paymentMethod || "").toUpperCase() === "BANK") {
+        // Với chuyển khoản: điều hướng sang trang ngân hàng, KHÔNG báo "đặt hàng thành công" ở checkout.
         await router.push(`/order/bank-transfer?id=${orderId}`);
         return;
     }
@@ -1169,7 +1165,7 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
                                 </label>
                             </div>
                         </div>
-                        
+                        <div v-if="submitErrorText" class="status-message status-error" style="margin-top:12px;">{{ submitErrorText }}</div>
                         <button class="btn btn-primary btn--block" type="submit" :disabled="placing">{{ placing ? "Đang xử lý..." : "Đặt hàng ngay" }}</button>
                     </form>
                     

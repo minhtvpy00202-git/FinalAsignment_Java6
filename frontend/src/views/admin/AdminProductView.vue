@@ -2,6 +2,7 @@
 import {computed, nextTick, ref} from "vue";
 import {AdminProductPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
+import AppToast from "@/components/AppToast.vue";
 
 const {state, form, editing, message, load, edit, reset, save, remove, next, prev, money} = AdminProductPage.setup();
 const PRICE_MIN = 0;
@@ -12,6 +13,9 @@ const errorMessage = ref("");
 const successMessage = ref("");
 const modalMessage = ref("");
 const modalMessageError = ref(false);
+const toastOpen = ref(false);
+const toastText = ref("");
+let toastTimer = null;
 const filters = ref({
     keyword: "",
     categoryId: "",
@@ -100,10 +104,16 @@ const submitForm = async () => {
     try {
         await save();
         await load();
-        successMessage.value = wasEditing ? "Cập nhật sản phẩm thành công" : "Thêm sản phẩm thành công";
+        successMessage.value = "";
         errorMessage.value = "";
-        modalMessage.value = successMessage.value;
+        modalMessage.value = "";
         modalMessageError.value = false;
+        toastText.value = wasEditing ? "Cập nhật sản phẩm thành công." : "Thêm sản phẩm thành công.";
+        toastOpen.value = true;
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            toastOpen.value = false;
+        }, 2300);
         modalOpen.value = false;
     } catch (e) {
         modalMessage.value = e.message || "Cập nhật thất bại";
@@ -360,5 +370,6 @@ const goToPage = async (page) => {
                 </form>
             </div>
         </div>
+        <AppToast :open="toastOpen" :text="toastText" type="success" />
     </main>
 </template>

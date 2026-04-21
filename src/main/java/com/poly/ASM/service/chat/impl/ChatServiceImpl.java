@@ -136,8 +136,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional
-    public void handleIncoming(ChatSendRequest request, Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+    public void handleIncoming(ChatSendRequest request, Authentication authentication, String principalName) {
+        String actorUsername = resolveActorUsername(authentication, principalName);
+        if (actorUsername == null || actorUsername.isBlank()) {
             return;
         }
         Integer productId = request == null ? null : request.productId();
@@ -150,12 +151,12 @@ public class ChatServiceImpl implements ChatService {
             return;
         }
 
-        boolean isAdmin = hasRole(authentication, "ADMIN");
+        boolean isAdmin = hasRole(authentication, "ADMIN") || isAdminAccount(actorUsername);
         if (isAdmin) {
-            handleAdminSend(authentication.getName(), request.customerId(), productId, content, mediaUrl);
+            handleAdminSend(actorUsername, request.customerId(), productId, content, mediaUrl);
             return;
         }
-        handleUserSend(authentication.getName(), productId, content, mediaUrl);
+        handleUserSend(actorUsername, productId, content, mediaUrl);
     }
 
     private void handleUserSend(String username, Integer productId, String content, String mediaUrl) {
@@ -248,6 +249,32 @@ public class ChatServiceImpl implements ChatService {
             }
         }
         return false;
+    }
+
+    private boolean isAdminAccount(String username) {
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        return accountService.findByUsername(username)
+                .map(account -> account.getAuthorities() != null && account.getAuthorities().stream()
+                        .anyMatch(authority ->
+                                authority != null
+                                        && authority.getRole() != null
+                                        && "ADMIN".equalsIgnoreCase(authority.getRole().getId())))
+                .orElse(false);
+    }
+
+    private String resolveActorUsername(Authentication authentication, String principalName) {
+        if (authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getName() != null
+                && !"anonymousUser".equals(authentication.getName())) {
+            return authentication.getName();
+        }
+        if (principalName != null && !principalName.isBlank() && !"anonymousUser".equals(principalName)) {
+            return principalName;
+        }
+        return null;
     }
 
     private String resolveFullname(String username) {

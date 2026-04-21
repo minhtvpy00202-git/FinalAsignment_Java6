@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:sqlserver://localhost:1433;databaseName=ASM_Java5;encrypt=true;trustServerCertificate=true
     username: sa
-    password: Strong@123
+    password: 123456Aa@
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
   jpa:
     hibernate:

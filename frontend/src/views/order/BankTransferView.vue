@@ -1,5 +1,5 @@
 <script setup>
-import {onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
 import {BankTransferPage} from "@/legacy/pages";
 import {api} from "@/api";
@@ -14,6 +14,13 @@ const cancelModalOpen = ref(false);
 const autoCancelSent = ref(false);
 const paidSuccessModalOpen = ref(false);
 const paidRedirecting = ref(false);
+const paidResultType = ref("paid");
+const codSwitching = ref(false);
+const successTitle = computed(() => paidResultType.value === "cod" ? "Đã chuyển sang COD thành công" : "Thanh toán thành công");
+const successDescription = computed(() => paidResultType.value === "cod"
+    ? `Đơn #${orderId.value} đã chuyển sang hình thức thanh toán khi nhận hàng (COD).`
+    : `Hệ thống đã xác nhận chuyển khoản cho đơn #${orderId.value}.`);
+const successButtonText = computed(() => paidResultType.value === "cod" ? "Xem chi tiết đơn COD" : "Xem chi tiết đơn");
 const transferContent = () => String(data.value?.order?.id || orderId.value || "").trim();
 const copyText = async (key, text) => {
     if (!text) {
@@ -31,10 +38,12 @@ const copyText = async (key, text) => {
     }
 };
 let pollTimer = null;
-const toOrderDetail = async () => {
+const toOrderDetail = async (resultType = "paid") => {
     if (!orderId.value || paidRedirecting.value) {
         return;
     }
+    paidResultType.value = resultType;
+    codSwitching.value = false;
     paidRedirecting.value = true;
     paymentMessage.value = "";
     paidSuccessModalOpen.value = true;
@@ -46,7 +55,7 @@ const closePaidSuccessModal = async () => {
 };
 watch(() => data.value?.status, (newStatus) => {
     if (newStatus && newStatus !== "PENDING_PAYMENT") {
-        toOrderDetail();
+        toOrderDetail(codSwitching.value ? "cod" : "paid");
     }
 });
 const pollPayos = async () => {
@@ -56,7 +65,7 @@ const pollPayos = async () => {
     try {
         const res = await api.orderWorkflow.payosStatus(orderId.value);
         if (res?.data?.paid || String(res?.data?.status || "").toUpperCase() === "PAID") {
-            await toOrderDetail();
+            await toOrderDetail("paid");
         }
     } catch (e) {
     }
@@ -67,7 +76,7 @@ const confirm = async () => {
     try {
         const res = await api.orderWorkflow.confirmBankTransfer(orderId.value);
         if (res?.data?.paid) {
-            await toOrderDetail();
+            await toOrderDetail("paid");
             return;
         }
         paymentMessage.value = "Hệ thống chưa ghi nhận thanh toán, vui lòng kiểm tra lại sau ít phút.";
@@ -78,6 +87,12 @@ const confirm = async () => {
     }
 };
 const handleRemove = async () => {
+    const accepted = typeof window !== "undefined"
+        ? window.confirm("Bạn có chắc chắn muốn huỷ thanh toán và xoá đơn hàng này?")
+        : true;
+    if (!accepted) {
+        return;
+    }
     try {
         autoCancelSent.value = true;
         await remove();
@@ -88,9 +103,11 @@ const handleRemove = async () => {
 };
 const handleToCod = async () => {
     try {
+        codSwitching.value = true;
         autoCancelSent.value = true;
         await toCod();
     } catch (e) {
+        codSwitching.value = false;
         paymentMessage.value = e.message || "Không thể chuyển sang COD.";
     }
 };
@@ -238,11 +255,11 @@ onUnmounted(() => {
                     </div>
                 </div>
                 <div style="padding: 20px 0;">
-                    <h4 style="margin-bottom: 10px;">Thanh toán thành công</h4>
-                    <p style="color: #666; font-size: 15px;">Hệ thống đã xác nhận chuyển khoản cho đơn #{{ orderId }}.</p>
+                    <h4 style="margin-bottom: 10px;">{{ successTitle }}</h4>
+                    <p style="color: #666; font-size: 15px;">{{ successDescription }}</p>
                 </div>
                 <div class="admin-form-actions" style="justify-content: center;">
-                    <button class="btn btn-primary" type="button" @click="closePaidSuccessModal">Xem chi tiết đơn</button>
+                    <button class="btn btn-primary" type="button" @click="closePaidSuccessModal">{{ successButtonText }}</button>
                 </div>
             </div>
         </div>

@@ -2,9 +2,10 @@
 import {HomePage} from "@/legacy/pages";
 import {ref, onMounted, onUnmounted, nextTick, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
+import {formatVnd} from "@/utils/format";
 
 const {filter, data, loading, error, load, productCard} = HomePage.setup();
-const money = (value) => Number(value || 0).toLocaleString("vi-VN");
+const money = formatVnd;
 const discountPercent = (product) => Math.max(0, Number(product?.discount || 0));
 const hasDiscount = (product) => discountPercent(product) > 0;
 const finalPrice = (product) => {

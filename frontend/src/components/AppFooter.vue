@@ -3,7 +3,7 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-section">
-                    <h6 class="footer-title">FASHION STORE</h6>
+                    <h6 class="footer-title">FASHION STOR</h6>
                     <p class="footer-text">Thời trang hiện đại, phong cách riêng biệt.</p>
                 </div>
                 <div class="footer-section">

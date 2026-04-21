@@ -45,6 +45,9 @@ public class AccountAController {
     private final AuthService authService;
     private final AuthProviderService authProviderService;
 
+    /**
+     * Trả dữ liệu quản trị account + danh sách role cho màn admin/account.
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<?>> index() {
         List<Map<String, Object>> accounts = accountService.findAll().stream()
@@ -59,6 +62,9 @@ public class AccountAController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tài khoản thành công", data));
     }
 
+    /**
+     * Tạo tài khoản thủ công từ admin.
+     */
     @PostMapping
     public ResponseEntity<ApiResponse<?>> create(@RequestParam("username") String username,
                                                   @RequestParam("password") String password,
@@ -69,15 +75,18 @@ public class AccountAController {
                                                   @RequestParam(value = "photoFile", required = false) MultipartFile photoFile,
                                                   @RequestParam(value = "activated", required = false) Boolean activated,
                                                   @RequestParam("roleId") String roleId) {
+        String normalizedUsername = username == null ? "" : username.trim();
+        String normalizedPassword = password == null ? "" : password.trim();
+        String normalizedEmail = email == null ? "" : email.trim();
         validatePhoneAndAddress(phone, address);
-        if (!isStrongPassword(password)) {
+        if (!isStrongPassword(normalizedPassword)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Mật khẩu phải có tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt");
         }
         Account account = new Account();
-        account.setUsername(username);
-        account.setPassword(passwordEncoder.encode(password));
+        account.setUsername(normalizedUsername);
+        account.setPassword(passwordEncoder.encode(normalizedPassword));
         account.setFullname(fullname);
-        account.setEmail(email);
+        account.setEmail(normalizedEmail);
         account.setPhone(phone.trim());
         account.setAddress(address.trim());
         String photoName = saveImage(photoFile);
@@ -96,6 +105,9 @@ public class AccountAController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Tạo tài khoản thành công", null));
     }
 
+    /**
+     * Lấy chi tiết account phục vụ chỉnh sửa.
+     */
     @GetMapping("/{username}")
     public ResponseEntity<ApiResponse<?>> edit(@PathVariable("username") String username) {
         Optional<Account> account = accountService.findByUsername(username);
@@ -111,6 +123,9 @@ public class AccountAController {
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết tài khoản thành công", data));
     }
 
+    /**
+     * Cập nhật hồ sơ account từ admin (không cho đổi password qua API này).
+     */
     @PutMapping("/{username}")
     public ResponseEntity<ApiResponse<?>> update(@PathVariable("username") String username,
                                                   @RequestParam(value = "password", required = false) String password,
@@ -151,6 +166,9 @@ public class AccountAController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật tài khoản thành công", null));
     }
 
+    /**
+     * Soft delete account.
+     */
     @DeleteMapping("/{username}")
     public ResponseEntity<ApiResponse<?>> delete(@PathVariable("username") String username) {
         Account currentUser = authService.getUser();
@@ -167,6 +185,9 @@ public class AccountAController {
         return ResponseEntity.ok(ApiResponse.success("Xóa tài khoản thành công", null));
     }
 
+    /**
+     * Cập nhật role tài khoản.
+     */
     @PutMapping("/{username}/role")
     public ResponseEntity<ApiResponse<?>> updateRole(@PathVariable("username") String username,
                                                      @RequestParam("roleId") String roleId) {
@@ -189,6 +210,9 @@ public class AccountAController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật vai trò thành công", Map.of("username", username, "roleId", normalizedRoleId)));
     }
 
+    /**
+     * Khóa/mở khóa tài khoản.
+     */
     @PutMapping("/{username}/activation")
     public ResponseEntity<ApiResponse<?>> updateActivation(@PathVariable("username") String username,
                                                            @RequestParam("activated") Boolean activated) {

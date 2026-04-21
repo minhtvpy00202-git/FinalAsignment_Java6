@@ -43,6 +43,9 @@ public class OrderAController {
     private final JdbcTemplate jdbcTemplate;
     private final PayosPaymentService payosPaymentService;
 
+    /**
+     * Danh sách đơn cho màn hình admin/order (lọc theo status, tìm kiếm theo từ khóa).
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<?>> index(@RequestParam(value = "tab", required = false, defaultValue = "pending") String tab,
                                                 @RequestParam(value = "page", required = false, defaultValue = "0") Integer page,
@@ -86,6 +89,9 @@ public class OrderAController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng quản trị thành công", data));
     }
 
+    /**
+     * Chi tiết đơn cho admin (bao gồm lines + thông tin giao hàng + map).
+     */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<?>> detail(@PathVariable("id") Long id) {
         Optional<Order> order = orderService.findById(id);
@@ -127,6 +133,9 @@ public class OrderAController {
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết đơn hàng thành công", data));
     }
 
+    /**
+     * Xóa đơn theo id (quyền admin).
+     */
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<ApiResponse<?>> delete(@PathVariable("id") Long id) {
@@ -137,6 +146,9 @@ public class OrderAController {
         return ResponseEntity.ok(ApiResponse.success("Xóa đơn hàng thành công", null));
     }
 
+    /**
+     * Cập nhật trạng thái xử lý đơn hàng từ phía admin.
+     */
     @PutMapping("/{id}/status")
     @Transactional
     public ResponseEntity<ApiResponse<?>> updateStatus(@PathVariable("id") Long id,
@@ -156,6 +168,12 @@ public class OrderAController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái đơn hàng thành công", Map.of("id", id, "status", status)));
     }
 
+    /**
+     * Duyệt hoàn tiền:
+     * - xóa dữ liệu đơn theo nghiệp vụ hiện tại
+     * - cập nhật trạng thái request hoàn tiền SUCCESS
+     * - gửi notification cho user yêu cầu.
+     */
     @PostMapping("/{id}/refund/approve")
     @Transactional
     public ResponseEntity<ApiResponse<?>> approveRefund(@PathVariable("id") Long id) {
@@ -183,6 +201,12 @@ public class OrderAController {
         return ResponseEntity.ok(ApiResponse.success("Đã duyệt hoàn tiền và xoá đơn hàng.", Map.of("orderId", id, "status", "SUCCESS")));
     }
 
+    /**
+     * Từ chối hoàn tiền:
+     * - lưu lý do từ chối
+     * - trả đơn về PLACED_PAID
+     * - gửi notification cho user yêu cầu.
+     */
     @PostMapping("/{id}/refund/decline")
     @Transactional
     public ResponseEntity<ApiResponse<?>> declineRefund(@PathVariable("id") Long id,

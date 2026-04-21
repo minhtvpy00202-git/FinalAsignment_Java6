@@ -157,7 +157,7 @@ onUnmounted(() => {
             <div class="container">
                 <router-link class="navbar-brand" to="/home/index">
                     <span class="brand-text">FASHION</span>
-                    <span class="brand-accent">STORE</span>
+                    <span class="brand-accent">STOREe</span>
                 </router-link>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
                     <span class="navbar-toggler-icon"></span>

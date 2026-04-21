@@ -1,6 +1,6 @@
 <script setup>
 import {LoginPage} from "@/legacy/pages";
-import {computed} from "vue";
+import {computed, ref} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {useSession} from "@/composables/useSession";
 
@@ -23,6 +23,7 @@ const requiredLoginMessage = computed(() => {
     return "";
 });
 const googleLoginUrl = computed(() => `/oauth2/authorization/google?redirect=${encodeURIComponent(redirectTo.value)}`);
+const showPassword = ref(false);
 const submitLogin = async () => {
     await login();
     if (!me.value) {
@@ -50,7 +51,12 @@ const submitLogin = async () => {
                     </div>
                     <div class="form-group">
                         <label for="password" class="form-label">Mật khẩu</label>
-                        <input id="password" type="password" v-model="form.password" class="form-control" placeholder="Nhập mật khẩu" required>
+                        <div class="password-field">
+                            <input id="password" :type="showPassword ? 'text' : 'password'" v-model="form.password" class="form-control" placeholder="Nhập mật khẩu" required>
+                            <button class="password-toggle" type="button" @click="showPassword = !showPassword">
+                                {{ showPassword ? "Ẩn" : "Hiện" }}
+                            </button>
+                        </div>
                     </div>
                     <div class="form-group form-group--row">
                         <router-link class="form-link" to="/account/forgot-password">Quên mật khẩu?</router-link>
@@ -70,3 +76,24 @@ const submitLogin = async () => {
         </div>
     </main>
 </template>
+
+<style scoped>
+.password-field{
+    position:relative;
+}
+.password-field .form-control{
+    padding-right:72px;
+}
+.password-toggle{
+    position:absolute;
+    right:8px;
+    top:50%;
+    transform:translateY(-50%);
+    border:0;
+    background:transparent;
+    color:#374151;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+}
+</style>

@@ -2,9 +2,10 @@
 import {ProductListPage} from "@/legacy/pages";
 import {nextTick, ref, onMounted, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
+import {formatVnd} from "@/utils/format";
 
 const {filter, data, loading, error, load, next, prev, productCard} = ProductListPage.setup();
-const money = (value) => Number(value || 0).toLocaleString("vi-VN");
+const money = formatVnd;
 const PRICE_MIN = 0;
 const PRICE_MAX = 2000000;
 const PRICE_STEP = 50000;

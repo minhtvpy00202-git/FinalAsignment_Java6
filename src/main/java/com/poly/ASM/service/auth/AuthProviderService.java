@@ -11,6 +11,10 @@ public class AuthProviderService {
 
     private final JdbcTemplate jdbcTemplate;
 
+    /**
+     * Đánh dấu tài khoản đã đăng nhập qua Google vào bảng mapping provider.
+     * Dùng MERGE để idempotent: gọi nhiều lần vẫn chỉ còn 1 bản ghi.
+     */
     public void markGoogle(String username) {
         if (username == null || username.isBlank()) {
             return;
@@ -28,6 +32,10 @@ public class AuthProviderService {
         }
     }
 
+    /**
+     * Xác định account hiện tại có phải Google hay không.
+     * Ưu tiên đọc từ bảng provider; fallback heuristic cho dữ liệu cũ chưa được migrate.
+     */
     public boolean isGoogleAccount(Account account) {
         if (account == null || account.getUsername() == null || account.getUsername().isBlank()) {
             return false;
@@ -65,6 +73,10 @@ public class AuthProviderService {
         return usernameMatchesGooglePattern && (hasRemotePhoto || defaultProfile);
     }
 
+    /**
+     * Tự tạo bảng mapping nếu DB chưa có.
+     * Mục tiêu là giảm phụ thuộc migration thủ công trong môi trường demo.
+     */
     private void ensureTable() {
         try {
             jdbcTemplate.execute("""

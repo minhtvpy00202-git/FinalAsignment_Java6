@@ -15,5 +15,5 @@ public interface ChatService {
 
     List<ChatConversationDto> getAdminConversations();
 
-    void handleIncoming(ChatSendRequest request, Authentication authentication);
+    void handleIncoming(ChatSendRequest request, Authentication authentication, String principalName);
 }

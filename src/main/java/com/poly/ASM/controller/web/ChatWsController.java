@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
+import java.security.Principal;
 
 @Controller
 @RequiredArgsConstructor
@@ -14,7 +15,7 @@ public class ChatWsController {
     private final ChatService chatService;
 
     @MessageMapping("/chat.send")
-    public void send(ChatSendRequest request, Authentication authentication) {
-        chatService.handleIncoming(request, authentication);
+    public void send(ChatSendRequest request, Authentication authentication, Principal principal) {
+        chatService.handleIncoming(request, authentication, principal == null ? null : principal.getName());
     }
 }

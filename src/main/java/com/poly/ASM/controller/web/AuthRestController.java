@@ -43,14 +43,22 @@ public class AuthRestController {
     private final AccountService accountService;
     private final AuthProviderService authProviderService;
 
+    /**
+     * Đăng nhập bằng username/password:
+     * - Authenticate qua AuthenticationManager
+     * - Phát access/refresh token
+     * - Ghi refresh token active vào kho token
+     * - Trả token + set HttpOnly cookie
+     */
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<?>> login(@RequestBody LoginRequest request, HttpServletResponse response) {
-        if (request.username() == null || request.username().isBlank()
-                || request.password() == null || request.password().isBlank()) {
+        String normalizedUsername = request.username() == null ? "" : request.username().trim();
+        String normalizedPassword = request.password() == null ? "" : request.password().trim();
+        if (normalizedUsername.isBlank() || normalizedPassword.isBlank()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Username và password là bắt buộc");
         }
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password())
+                new UsernamePasswordAuthenticationToken(normalizedUsername, normalizedPassword)
         );
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         String accessToken = jwtService.generateAccessToken(userDetails);
@@ -73,6 +81,10 @@ public class AuthRestController {
         );
     }
 
+    /**
+     * Làm mới token theo cơ chế rotate refresh token.
+     * Refresh token cũ sẽ bị blacklist và thay bằng cặp token mới.
+     */
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<?>> refresh(@RequestBody(required = false) RefreshRequest request,
                                                   HttpServletRequest servletRequest,
@@ -127,6 +139,11 @@ public class AuthRestController {
         }
     }
 
+    /**
+     * Đăng xuất:
+     * - Blacklist access/refresh token (header/body/cookie)
+     * - Xóa cookie xác thực.
+     */
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<?>> logout(@RequestBody(required = false) LogoutRequest request,
                                                  @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
@@ -151,6 +168,9 @@ public class AuthRestController {
         return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công", null));
     }
 
+    /**
+     * Trả thông tin tài khoản hiện tại cho frontend header/session.
+     */
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<?>> me(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
@@ -184,6 +204,9 @@ public class AuthRestController {
     public record LogoutRequest(String refreshToken) {
     }
 
+    /**
+     * Chuẩn hóa thao tác blacklist token; token lỗi format sẽ bị bỏ qua an toàn.
+     */
     private void blacklistToken(String token) {
         try {
             Date expiration = jwtService.extractExpiration(token);

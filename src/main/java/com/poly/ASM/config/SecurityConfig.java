@@ -29,6 +29,12 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
+    /**
+     * Chuỗi lọc bảo mật cho API REST:
+     * - stateless JWT
+     * - role-based theo endpoint
+     * - disable form login/oauth2 tại nhánh /api/**.
+     */
     @Bean
     @Order(1)
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http,
@@ -61,6 +67,11 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Chuỗi lọc bảo mật cho web route (MVC/SPA entry):
+     * - hỗ trợ form login và OAuth2 login
+     * - giới hạn /admin/** theo role ADMIN.
+     */
     @Bean
     @Order(2)
     public SecurityFilterChain webSecurityFilterChain(HttpSecurity http,

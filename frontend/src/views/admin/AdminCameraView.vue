@@ -5,9 +5,8 @@ import AdminNav from "@/components/AdminNav.vue";
 
 const {url, load} = AdminCameraPage.setup();
 const motionEnabled = ref(true);
-const motionRows = ref(["Chưa có cảnh báo chuyển động."]);
+const motionRows = ref(["Chưa phát hiện chuyển động."]);
 const videoRef = ref(null);
-let motionTimer = null;
 let hls = null;
 
 const toggleMotion = () => {
@@ -44,29 +43,12 @@ const bindStream = async () => {
 };
 
 onMounted(() => {
-    const addMotion = () => {
-        if (!motionEnabled.value) {
-            scheduleMotion();
-            return;
-        }
-        const now = new Date().toLocaleTimeString("vi-VN");
-        motionRows.value = [`Phát hiện chuyển động lúc ${now}`, ...motionRows.value].slice(0, 8);
-        scheduleMotion();
-    };
-    const scheduleMotion = () => {
-        const delay = 8000 + Math.floor(Math.random() * 12001);
-        motionTimer = setTimeout(addMotion, delay);
-    };
-    scheduleMotion();
     bindStream();
 });
 watch(url, () => {
     bindStream();
 });
 onUnmounted(() => {
-    if (motionTimer) {
-        clearTimeout(motionTimer);
-    }
     if (hls) {
         hls.destroy();
     }

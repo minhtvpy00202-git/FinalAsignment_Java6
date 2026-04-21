@@ -25,6 +25,9 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final AuthorityRepository authorityRepository;
 
+    /**
+     * Hàm gốc tạo notification; các hàm notify* sẽ gom về đây để lưu DB nhất quán.
+     */
     @Override
     public Notification createNotification(Account account, Order order, String title, String content) {
         Notification notification = new Notification();
@@ -37,6 +40,9 @@ public class NotificationServiceImpl implements NotificationService {
         return notificationRepository.save(notification);
     }
 
+    /**
+     * Notify cho user sau khi đặt hàng thành công.
+     */
     @Override
     public void notifyOrderPlacedForUser(Account account, Order order) {
         String time = FORMATTER.format(order.getCreateDate());
@@ -45,6 +51,9 @@ public class NotificationServiceImpl implements NotificationService {
         createNotification(account, order, title, content);
     }
 
+    /**
+     * Notify cho toàn bộ admin khi có đơn mới.
+     */
     @Override
     public void notifyOrderPlacedForAdmins(Order order) {
         String time = FORMATTER.format(order.getCreateDate());
@@ -59,6 +68,10 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+    /**
+     * Notify trạng thái giao hàng cho cả user và admin.
+     * Chỉ xử lý các trạng thái terminal thành công/thất bại.
+     */
     @Override
     public void notifyOrderStatusChange(Order order, String status) {
         String userTitle = "Cập nhật đơn hàng";
@@ -88,6 +101,9 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+    /**
+     * Notify hỗ trợ chat: đẩy cho admin được chỉ định hoặc toàn bộ admin nếu chưa assign.
+     */
     @Override
     public void notifyChatSupportForAdmins(String customerId, String customerFullname, Integer productId, String previewText, String assignedAdminId) {
         String user = customerFullname == null || customerFullname.isBlank() ? customerId : customerFullname;
@@ -107,6 +123,9 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+    /**
+     * Notify cho admin khi user gửi yêu cầu hoàn tiền.
+     */
     @Override
     public void notifyRefundRequestForAdmins(Order order) {
         if (order == null || order.getId() == null) {
@@ -123,6 +142,9 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+    /**
+     * Notify kết quả duyệt/từ chối hoàn tiền cho đúng người đã gửi yêu cầu.
+     */
     @Override
     public void notifyRefundResultForUser(Account account, Long orderId, boolean approved, String reason) {
         if (account == null) {

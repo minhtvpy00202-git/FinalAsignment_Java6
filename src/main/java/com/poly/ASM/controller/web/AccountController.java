@@ -40,6 +40,12 @@ public class AccountController {
     private final AuthProviderService authProviderService;
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * Đăng ký tài khoản thường:
+     * - validate trùng username/email
+     * - validate độ mạnh mật khẩu
+     * - gán role USER mặc định.
+     */
     @PostMapping("/sign-up")
     public ResponseEntity<ApiResponse<?>> signUp(@RequestParam("username") String username,
                                                   @RequestParam("password") String password,
@@ -47,21 +53,24 @@ public class AccountController {
                                                   @RequestParam("email") String email,
                                                   @RequestParam(value = "phone", required = false) String phone,
                                                   @RequestParam(value = "address", required = false) String address) {
-        if (accountService.findByUsername(username).isPresent()) {
+        String normalizedUsername = username == null ? "" : username.trim();
+        String normalizedPassword = password == null ? "" : password.trim();
+        String normalizedEmail = email == null ? "" : email.trim();
+        if (accountService.findByUsername(normalizedUsername).isPresent()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Username đã tồn tại", null));
         }
-        if (accountService.findByEmail(email).isPresent()) {
+        if (accountService.findByEmail(normalizedEmail).isPresent()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Email đã tồn tại", null));
         }
-        if (!isStrongPassword(password)) {
+        if (!isStrongPassword(normalizedPassword)) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Mật khẩu phải có tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.", null));
         }
 
         Account account = new Account();
-        account.setUsername(username);
-        account.setPassword(passwordEncoder.encode(password));
+        account.setUsername(normalizedUsername);
+        account.setPassword(passwordEncoder.encode(normalizedPassword));
         account.setFullname(fullname);
-        account.setEmail(email);
+        account.setEmail(normalizedEmail);
         account.setPhone(phone == null || phone.isBlank() ? "0000000000" : phone.trim());
         account.setAddress(address == null || address.isBlank() ? "Chưa cập nhật" : address.trim());
         account.setActivated(true);
@@ -76,6 +85,9 @@ public class AccountController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Đăng ký thành công, vui lòng đăng nhập", saved));
     }
 
+    /**
+     * Lấy hồ sơ người dùng hiện tại cho trang account/edit-profile.
+     */
     @GetMapping("/profile")
     public ResponseEntity<ApiResponse<?>> profile() {
         Account user = authService.getUser();
@@ -94,6 +106,12 @@ public class AccountController {
         return ResponseEntity.ok(ApiResponse.success("Lấy hồ sơ người dùng thành công", data));
     }
 
+    /**
+     * Cập nhật hồ sơ:
+     * - chặn đổi email với tài khoản Google
+     * - validate phone duy nhất/to đúng định dạng
+     * - hỗ trợ upload avatar.
+     */
     @PostMapping("/profile")
     public ResponseEntity<ApiResponse<?>> editProfile(@RequestParam("fullname") String fullname,
                                                        @RequestParam("email") String email,
@@ -139,6 +157,9 @@ public class AccountController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật hồ sơ thành công", saved));
     }
 
+    /**
+     * Upload avatar vào thư mục uploads và trả tên file đã lưu.
+     */
     private String savePhoto(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             return null;
@@ -159,6 +180,10 @@ public class AccountController {
         }
     }
 
+    /**
+     * Đổi mật khẩu cho tài khoản thường.
+     * Tài khoản Google bị chặn ở tầng backend để tránh bypass UI.
+     */
     @PostMapping("/change-password")
     public ResponseEntity<ApiResponse<?>> changePassword(@RequestParam("currentPassword") String currentPassword,
                                                           @RequestParam("newPassword") String newPassword) {
@@ -180,6 +205,10 @@ public class AccountController {
         return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", null));
     }
 
+    /**
+     * Demo reset mật khẩu: sinh mật khẩu mới và trả về response.
+     * (Môi trường production nên gửi qua email thay vì trả thẳng ra API).
+     */
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<?>> forgotPassword(@RequestParam("email") String email) {
         Optional<Account> account = accountService.findByEmail(email);

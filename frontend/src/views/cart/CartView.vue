@@ -126,6 +126,24 @@ const openSellerChat = (item) => {
         thumbnailUrl: item?.image ? `/images/${item.image}` : ""
     });
 };
+const confirmRemoveItem = async (item) => {
+    const accepted = typeof window !== "undefined"
+        ? window.confirm(`Bạn có chắc chắn muốn xoá "${item?.name || "sản phẩm"}" khỏi giỏ hàng?`)
+        : true;
+    if (!accepted) {
+        return;
+    }
+    await removeItem(item);
+};
+const confirmClearCart = async () => {
+    const accepted = typeof window !== "undefined"
+        ? window.confirm("Bạn có chắc chắn muốn xoá toàn bộ sản phẩm trong giỏ hàng?")
+        : true;
+    if (!accepted) {
+        return;
+    }
+    await clear();
+};
 </script>
 
 <template>
@@ -200,7 +218,7 @@ const openSellerChat = (item) => {
                                 <td>
                                     <div class="cart-row-actions">
                                         <button class="btn btn-outline-secondary btn-sm cart-row-btn" type="button" @click="openSellerChat(item)">Liên hệ người bán</button>
-                                        <button class="btn btn-action-solid btn-sm cart-row-btn" type="button" @click="removeItem(item)">Xóa</button>
+                                        <button class="btn btn-action-solid btn-sm cart-row-btn" type="button" @click="confirmRemoveItem(item)">Xóa</button>
                                     </div>
                                 </td>
                             </tr>
@@ -224,7 +242,7 @@ const openSellerChat = (item) => {
                         </div>
                     </div>
                     <div class="cart-summary-actions">
-                        <button class="btn btn-outline-secondary" type="button" @click="clear">Xóa tất cả</button>
+                        <button class="btn btn-outline-secondary" type="button" @click="confirmClearCart">Xóa tất cả</button>
                         <router-link class="btn checkout-btn" to="/order/check-out">Thanh toán</router-link>
                     </div>
                 </div>
