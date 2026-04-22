@@ -511,14 +511,15 @@ onMounted(async () => {
                         <button class="order-tab-btn" :class="{active: activeTab === 'delivered'}" type="button" @click="activeTab = 'delivered'">Đơn đã giao</button>
                         <button class="order-tab-btn" :class="{active: activeTab === 'refund'}" type="button" @click="activeTab = 'refund'">Yêu cầu hoàn tiền</button>
                     </div>
-                    <div class="table-actions" style="justify-content: space-between; margin-bottom: 10px;">
-                        <span class="status-message" style="margin:0;">Trang {{ (currentPaging.page || 0) + 1 }} / {{ currentPaging.totalPages || 0 }} — Tổng {{ currentPaging.totalElements || 0 }} đơn</span>
-                        <div style="display:flex;gap:8px;">
+                    <div class="table-actions order-table-toolbar">
+                        <span class="status-message order-page-status">Trang {{ (currentPaging.page || 0) + 1 }} / {{ currentPaging.totalPages || 0 }} — Tổng {{ currentPaging.totalElements || 0 }} đơn</span>
+                        <div class="order-page-nav">
                             <button class="btn btn-outline-primary" type="button" @click="toPrevPage(activeTab)" :disabled="(currentPaging.page || 0) <= 0">Trang trước</button>
                             <button class="btn btn-outline-primary" type="button" @click="toNextPage(activeTab)" :disabled="(currentPaging.page || 0) + 1 >= (currentPaging.totalPages || 0)">Trang sau</button>
                         </div>
                     </div>
-                    <table>
+                    <div class="order-table-wrap">
+                    <table :class="{'order-table-refund': activeTab === 'refund'}">
                         <thead>
                         <tr>
                             <th>Mã đơn</th>
@@ -551,10 +552,10 @@ onMounted(async () => {
                                 <div class="order-address-scroll">{{ o.address || "" }}</div>
                             </td>
                             <td class="table-actions refund-actions" v-if="activeTab !== 'pending'">
-                                <button class="btn btn-action-outline" type="button" @click="openDetail(o.id)">Chi tiết</button>
+                                <button class="btn refund-action-btn refund-action-btn--detail" type="button" @click="openDetail(o.id)">Chi tiết</button>
                                 <template v-if="activeTab === 'refund'">
-                                    <button class="btn btn-outline-primary" type="button" @click="approveRefund(o.id)">Duyệt hoàn tiền</button>
-                                    <button class="btn btn-action-solid" type="button" @click="openDeclineModal(o.id)">Từ chối</button>
+                                    <button class="btn refund-action-btn refund-action-btn--approve" type="button" @click="approveRefund(o.id)">Duyệt hoàn tiền</button>
+                                    <button class="btn refund-action-btn refund-action-btn--reject" type="button" @click="openDeclineModal(o.id)">Từ chối</button>
                                 </template>
                             </td>
                         </tr>
@@ -563,6 +564,7 @@ onMounted(async () => {
                         </tr>
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -699,6 +701,27 @@ onMounted(async () => {
     white-space: nowrap;
     padding-bottom: 4px;
 }
+.order-table-toolbar{
+    justify-content:space-between;
+    margin-bottom:10px;
+    gap:12px;
+    flex-wrap:wrap;
+}
+.order-page-status{
+    margin:0;
+}
+.order-page-nav{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.order-table-wrap{
+    width:100%;
+    overflow-x:auto;
+}
+.order-table-refund{
+    min-width:1180px;
+}
 
 .order-empty-row {
     text-align: center;
@@ -708,6 +731,51 @@ onMounted(async () => {
 .refund-actions{
     gap:8px;
     justify-content:flex-start;
+    flex-wrap:nowrap;
+}
+.refund-action-btn{
+    height:34px !important;
+    padding:4px 12px !important;
+    font-size:13px !important;
+    font-weight:600 !important;
+    border-radius:8px !important;
+    white-space:nowrap;
+    line-height:1.2 !important;
+    text-transform:none !important;
+    letter-spacing:normal !important;
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    border:1px solid transparent !important;
+    background:#fff !important;
+    color:#111827 !important;
+}
+.refund-action-btn--detail{
+    border-color:#d1d5db !important;
+    color:#374151 !important;
+}
+.refund-action-btn--detail:hover{
+    background:#f9fafb !important;
+    border-color:#9ca3af !important;
+    color:#111827 !important;
+}
+.refund-action-btn--approve{
+    border-color:#2563eb !important;
+    color:#2563eb !important;
+}
+.refund-action-btn--approve:hover{
+    background:#eff6ff !important;
+    border-color:#1d4ed8 !important;
+    color:#1d4ed8 !important;
+}
+.refund-action-btn--reject{
+    border-color:#ef4444 !important;
+    color:#b91c1c !important;
+}
+.refund-action-btn--reject:hover{
+    background:#fef2f2 !important;
+    border-color:#dc2626 !important;
+    color:#991b1b !important;
 }
 .refund-actions .btn{
     white-space:nowrap;

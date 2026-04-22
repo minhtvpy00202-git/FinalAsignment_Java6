@@ -2969,13 +2969,30 @@ textarea:focus {
 
 .revenue-chart-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 16px;
     margin-bottom: 20px;
 }
 
+.revenue-chart-grid.has-line {
+    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+}
+
 .revenue-chart-card {
     padding: 16px;
+}
+
+.revenue-chart-card--pie {
+    display: flex;
+    flex-direction: column;
+}
+
+.revenue-chart-grid.has-line .revenue-chart-card--pie {
+    aspect-ratio: 1 / 1;
+}
+
+.revenue-chart-card--line {
+    min-width: 0;
 }
 
 .revenue-chart-card h4 {
@@ -2986,8 +3003,15 @@ textarea:focus {
 
 .revenue-pie-wrap {
     display: flex;
-    gap: 16px;
-    align-items: flex-start;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    min-height: 0;
+}
+
+.revenue-chart-grid:not(.has-line) .revenue-pie-wrap {
+    justify-content: flex-start;
+    min-height: 220px;
 }
 
 .revenue-pie-chart {
@@ -3162,6 +3186,12 @@ textarea:focus {
 @media (max-width: 991px) {
     .revenue-chart-grid {
         grid-template-columns: 1fr;
+    }
+    .revenue-chart-grid.has-line {
+        grid-template-columns: 1fr;
+    }
+    .revenue-chart-card--pie {
+        aspect-ratio: auto;
     }
     
     .revenue-pie-wrap {

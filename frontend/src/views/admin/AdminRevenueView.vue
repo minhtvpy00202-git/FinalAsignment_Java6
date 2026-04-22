@@ -38,7 +38,7 @@ const viewMode = computed(() => route.meta.revenueView || "summary");
 const isSummaryMode = computed(() => viewMode.value === "summary");
 const isDayMode = computed(() => viewMode.value === "day");
 const showLineChart = computed(() => !isSummaryMode.value && !isDayMode.value);
-const total = computed(() => rows.value.reduce((sum, row) => sum + Number(row.lineTotal || 0), 0));
+const total = computed(() => rows.value.reduce((sum, row) => sum + rowLineTotal(row), 0));
 const activeRange = computed(() => {
     if (isSummaryMode.value) {
         return {fromDate: summaryParams.fromDate, toDate: summaryParams.toDate};
@@ -50,7 +50,7 @@ const categoryBreakdown = computed(() => {
     const map = new Map();
     for (const row of rows.value) {
         const key = (row.categoryName || "Khác").trim() || "Khác";
-        map.set(key, (map.get(key) || 0) + Number(row.lineTotal || 0));
+        map.set(key, (map.get(key) || 0) + rowLineTotal(row));
     }
     const list = Array.from(map.entries()).map(([name, amount], index) => ({
         name,
@@ -87,6 +87,7 @@ const pieSlices = computed(() => {
         return {
             ...item,
             ratio,
+            isFullCircle: ratio >= 0.999999,
             path: describePieArc(100, 100, 86, startAngle, endAngle)
         };
     });
@@ -103,10 +104,10 @@ const lineSeries = computed(() => {
         }
         if (viewMode.value === "quarter" || viewMode.value === "year") {
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-            map.set(monthKey, (map.get(monthKey) || 0) + Number(row.lineTotal || 0));
+            map.set(monthKey, (map.get(monthKey) || 0) + rowLineTotal(row));
         } else {
             const dayKey = formatDateInput(date);
-            map.set(dayKey, (map.get(dayKey) || 0) + Number(row.lineTotal || 0));
+            map.set(dayKey, (map.get(dayKey) || 0) + rowLineTotal(row));
         }
     }
     const labels = buildLineLabels(viewMode.value, activeRange.value);
@@ -411,6 +412,47 @@ function axisLabelByMode(mode) {
     }
     return "Thời gian";
 }
+function parseLooseNumber(value) {
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? value : 0;
+    }
+    const raw = String(value ?? "").trim();
+    if (!raw) {
+        return 0;
+    }
+    const cleaned = raw.replace(/[^\d.,-]/g, "");
+    if (!cleaned) {
+        return 0;
+    }
+    if (cleaned.includes(".") && cleaned.includes(",")) {
+        const normalized = cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")
+            ? cleaned.replace(/\./g, "").replace(",", ".")
+            : cleaned.replace(/,/g, "");
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (/^\d{1,3}(\.\d{3})+$/.test(cleaned)) {
+        const parsed = Number(cleaned.replace(/\./g, ""));
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (/^\d{1,3}(,\d{3})+$/.test(cleaned)) {
+        const parsed = Number(cleaned.replace(/,/g, ""));
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const parsed = Number(cleaned.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+function rowLineTotal(row) {
+    const lineTotalValue = parseLooseNumber(row?.lineTotal);
+    if (lineTotalValue > 0) {
+        return lineTotalValue;
+    }
+    const unitPrice = parseLooseNumber(row?.unitPrice);
+    const quantity = parseLooseNumber(row?.quantity);
+    const discount = parseLooseNumber(row?.discountAmount);
+    const fallback = unitPrice * quantity - discount;
+    return fallback > 0 ? fallback : 0;
+}
 function showPieTooltip(slice, event) {
     hoveredSliceName.value = slice?.name || "";
     pieTooltip.text = `${slice?.name || ""}: ${money(slice?.amount || 0)} VND (${((slice?.ratio || 0) * 100).toFixed(1)}%)`;
@@ -548,12 +590,24 @@ function hideLineTooltip() {
                 </div>
             </form>
             <div v-if="error" class="status-message status-error">{{ error }}</div>
-            <div class="revenue-chart-grid" v-if="!isSummaryMode">
-                <div class="card revenue-chart-card">
+            <div class="revenue-chart-grid" :class="{'has-line': showLineChart}" v-if="!isSummaryMode">
+                <div class="card revenue-chart-card revenue-chart-card--pie">
                     <h4>Tỷ lệ  % doanh thu theo thể loại</h4>
                     <div v-if="pieSlices.length" class="revenue-pie-wrap">
                         <svg viewBox="0 0 200 200" class="revenue-pie-chart">
+                            <circle
+                                v-if="pieSlices.length === 1 && pieSlices[0].isFullCircle"
+                                cx="100"
+                                cy="100"
+                                r="86"
+                                :fill="pieSlices[0].color"
+                                :class="{active: hoveredSliceName === pieSlices[0].name}"
+                                @mouseenter="showPieTooltip(pieSlices[0], $event)"
+                                @mousemove="movePieTooltip($event)"
+                                @mouseleave="hidePieTooltip"
+                            />
                             <path
+                                v-else
                                 v-for="slice in pieSlices"
                                 :key="slice.name"
                                 :d="slice.path"
@@ -574,7 +628,7 @@ function hideLineTooltip() {
                     </div>
                     <div v-else class="status-message">Chưa có dữ liệu doanh thu theo thể loại.</div>
                 </div>
-                <div class="card revenue-chart-card" v-if="showLineChart">
+                <div class="card revenue-chart-card revenue-chart-card--line" v-if="showLineChart">
                     <h4>{{ chartTitle }}</h4>
                     <div v-if="lineChart.circles.length" class="revenue-line-wrap">
                         <svg viewBox="0 0 760 280" class="revenue-line-chart">
